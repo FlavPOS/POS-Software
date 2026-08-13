@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+
+import '../repositories/product_repository.dart';
+import '../services/product_sync_service.dart';
+
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.product});
   final Product? product;
@@ -11,6 +17,9 @@ class ProductFormScreen extends StatefulWidget {
 }
 
 class _ProductFormScreenState extends State<ProductFormScreen> {
+  final ProductSyncService _syncService = ProductSyncService.instance;
+
+  static const Uuid _uuid = Uuid();
   final _formKey = GlobalKey<FormState>();
   final _service = ProductService();
   late final TextEditingController _name,
@@ -65,71 +74,147 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    final cost = double.parse(_cost.text),
-        selling = double.parse(_selling.text);
-    if (selling < cost) {
-      final ok =
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final costPrice = double.parse(_cost.text.trim());
+
+    final sellingPrice = double.parse(_selling.text.trim());
+
+    if (sellingPrice < costPrice) {
+      final continueSaving =
           await showDialog<bool>(
             context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Selling below cost'),
-              content: const Text(
-                'Selling price is lower than cost price. Continue?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Selling below cost'),
+                content: const Text(
+                  'Selling price is lower than cost price. '
+                  'Do you want to continue?',
                 ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Continue'),
-                ),
-              ],
-            ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context, false);
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context, true);
+                    },
+                    child: const Text('Continue'),
+                  ),
+                ],
+              );
+            },
           ) ??
           false;
-      if (!ok) return;
+
+      if (!continueSaving) {
+        return;
+      }
     }
-    setState(() => _saving = true);
+
+    setState(() {
+      _saving = true;
+    });
+
     try {
-      await _service.save(
-        id: widget.product?.id,
-        name: _name.text,
-        sku: _sku.text,
-        barcode: _barcode.text,
-        costPrice: cost,
-        sellingPrice: selling,
-        beginningStock: int.parse(_stock.text),
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final existingProduct = widget.product;
+
+      final beginningStock = int.parse(_stock.text.trim());
+
+      final normalizedSku = _sku.text.trim().toUpperCase();
+
+      final normalizedBarcode = _barcode.text.trim().isEmpty
+          ? null
+          : _barcode.text.trim();
+
+      final product = Product(
+        id: existingProduct?.id ?? _uuid.v4(),
+        name: _name.text.trim(),
+        sku: normalizedSku,
+        barcode: normalizedBarcode,
+        costPrice: costPrice,
+        sellingPrice: sellingPrice,
+        beginningStock: beginningStock,
+        currentStock: existingProduct == null
+            ? beginningStock
+            : existingProduct.currentStock,
         active: _active,
-        oldSku: widget.product?.sku,
-        oldBarcode: widget.product?.barcode,
+        localPhotoPath: existingProduct?.localPhotoPath,
+        createdAt: existingProduct?.createdAt ?? now,
+        updatedAt: now,
+        syncStatus: ProductSyncStatus.pending,
+        syncError: null,
+        isDeleted: false,
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.product == null
-                ? 'Product saved. It will sync when online.'
-                : 'Product updated. It will sync when online.',
-          ),
-        ),
-      );
+
+      if (kIsWeb) {
+        await _service.save(
+          id: existingProduct?.id,
+          name: product.name,
+          sku: product.sku,
+          barcode: product.barcode,
+          costPrice: product.costPrice,
+          sellingPrice: product.sellingPrice,
+          beginningStock: product.beginningStock,
+          active: product.active,
+          oldSku: existingProduct?.sku,
+          oldBarcode: existingProduct?.barcode,
+        );
+      } else {
+        await _syncService.saveProduct(product);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final message = kIsWeb
+          ? existingProduct == null
+                ? 'Product saved successfully.'
+                : 'Product updated successfully.'
+          : existingProduct == null
+          ? 'Product saved locally. Sync will continue automatically.'
+          : 'Product updated locally. Sync will continue automatically.';
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+
       Navigator.pop(context);
-    } on DuplicateProductException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${e.field} already exists.')));
+    } on DuplicateLocalProductException catch (error) {
+      if (!mounted) {
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.toString())));
+    } on DuplicateProductException catch (error) {
+      if (!mounted) {
+        return;
       }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${error.field} already exists.')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to save product: $error')));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
     }
   }
 
