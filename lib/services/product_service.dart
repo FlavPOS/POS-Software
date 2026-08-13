@@ -16,21 +16,31 @@ class ProductService {
   DatabaseReference get _barcodeIndex => _db.ref('productBarcodeIndex');
   DatabaseReference get connectedRef => _db.ref('.info/connected');
 
-  Stream<List<Product>> watchProducts() => _products.onValue.map((event) {
-    final raw = event.snapshot.value;
-    if (raw is! Map) return <Product>[];
-    final items = raw.entries
-        .where((e) => e.value is Map)
-        .map(
-          (e) => Product.fromMap(
-            e.key.toString(),
-            Map<Object?, Object?>.from(e.value as Map),
-          ),
-        )
-        .toList();
-    items.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return items;
-  });
+  Stream<List<Product>> watchProducts() {
+    return _products.onValue.map((event) {
+      final raw = event.snapshot.value;
+
+      if (raw is! Map) {
+        return <Product>[];
+      }
+
+      final products = raw.entries
+          .where((entry) => entry.value is Map)
+          .map<Product>(
+            (entry) => Product.fromFirebase(
+              id: entry.key.toString(),
+              map: Map<Object?, Object?>.from(entry.value as Map),
+            ),
+          )
+          .toList();
+
+      products.sort((first, second) {
+        return first.name.toLowerCase().compareTo(second.name.toLowerCase());
+      });
+
+      return products;
+    });
+  }
 
   Future<void> save({
     String? id,

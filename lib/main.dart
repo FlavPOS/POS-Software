@@ -4,10 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
+import 'database/database_helper.dart';
 import 'screens/products_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await DatabaseHelper.instance.initialize();
+
+    final databasePath = await DatabaseHelper.instance.getDatabasePath();
+
+    debugPrint('SQLite initialized: $databasePath');
+  }
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   if (!kIsWeb) {
     try {
