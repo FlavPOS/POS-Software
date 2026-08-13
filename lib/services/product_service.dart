@@ -1,0 +1,103 @@
+import 'package:firebase_database/firebase_database.dart';
+
+import '../models/product.dart';
+
+class DuplicateProductException implements Exception {
+  const DuplicateProductException(this.field);
+  final String field;
+  @override
+  String toString() => 'Duplicate $field';
+}
+
+class ProductService {
+  final FirebaseDatabase _db = FirebaseDatabase.instance;
+  DatabaseReference get _products => _db.ref('products');
+  DatabaseReference get _skuIndex => _db.ref('productSkuIndex');
+  DatabaseReference get _barcodeIndex => _db.ref('productBarcodeIndex');
+  DatabaseReference get connectedRef => _db.ref('.info/connected');
+
+  Stream<List<Product>> watchProducts() => _products.onValue.map((event) {
+    final raw = event.snapshot.value;
+    if (raw is! Map) return <Product>[];
+    final items = raw.entries
+        .where((e) => e.value is Map)
+        .map(
+          (e) => Product.fromMap(
+            e.key.toString(),
+            Map<Object?, Object?>.from(e.value as Map),
+          ),
+        )
+        .toList();
+    items.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return items;
+  });
+
+  Future<void> save({
+    String? id,
+    required String name,
+    required String sku,
+    String? barcode,
+    required double costPrice,
+    required double sellingPrice,
+    required int beginningStock,
+    required bool active,
+    required String? oldSku,
+    required String? oldBarcode,
+  }) async {
+    final productId = id ?? _products.push().key!;
+    final normalizedSku = sku.trim().toUpperCase();
+    final normalizedBarcode = barcode?.trim() ?? '';
+    await _claim(_skuIndex.child(normalizedSku), productId, 'SKU');
+    try {
+      if (normalizedBarcode.isNotEmpty) {
+        await _claim(
+          _barcodeIndex.child(normalizedBarcode),
+          productId,
+          'barcode',
+        );
+      }
+    } catch (_) {
+      if (id == null || oldSku != normalizedSku) {
+        await _skuIndex.child(normalizedSku).remove();
+      }
+      rethrow;
+    }
+
+    final updates = <String, Object?>{
+      'products/$productId/name': name.trim(),
+      'products/$productId/sku': normalizedSku,
+      'products/$productId/barcode': normalizedBarcode.isEmpty
+          ? null
+          : normalizedBarcode,
+      'products/$productId/costPrice': costPrice,
+      'products/$productId/sellingPrice': sellingPrice,
+      'products/$productId/beginningStock': beginningStock,
+      'products/$productId/active': active,
+      'products/$productId/updatedAt': ServerValue.timestamp,
+      'productSkuIndex/$normalizedSku': productId,
+    };
+    if (id == null) {
+      updates['products/$productId/createdAt'] = ServerValue.timestamp;
+    }
+    if (normalizedBarcode.isNotEmpty) {
+      updates['productBarcodeIndex/$normalizedBarcode'] = productId;
+    }
+    if (oldSku != null && oldSku.isNotEmpty && oldSku != normalizedSku) {
+      updates['productSkuIndex/$oldSku'] = null;
+    }
+    if (oldBarcode != null &&
+        oldBarcode.isNotEmpty &&
+        oldBarcode != normalizedBarcode) {
+      updates['productBarcodeIndex/$oldBarcode'] = null;
+    }
+    await _db.ref().update(updates);
+  }
+
+  Future<void> _claim(DatabaseReference ref, String id, String field) async {
+    final result = await ref.runTransaction((current) {
+      if (current == null || current == id) return Transaction.success(id);
+      return Transaction.abort();
+    });
+    if (!result.committed) throw DuplicateProductException(field);
+  }
+}
