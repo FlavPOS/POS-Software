@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
+import 'services/product_sync_service.dart';
 import 'database/database_helper.dart';
 import 'screens/products_screen.dart';
 
@@ -24,6 +27,10 @@ Future<void> main() async {
       await FirebaseDatabase.instance.ref('products').keepSynced(true);
     } catch (_) {}
   }
+  if (!kIsWeb) {
+    unawaited(ProductSyncService.instance.start());
+  }
+
   runApp(const SimplePosApp());
 }
 

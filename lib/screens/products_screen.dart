@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../repositories/product_repository.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 
@@ -16,6 +18,7 @@ class ProductsScreen extends StatefulWidget {
 
 class _ProductsScreenState extends State<ProductsScreen> {
   final ProductService _service = ProductService();
+  final ProductRepository _repository = ProductRepository.instance;
   final TextEditingController _searchController = TextEditingController();
 
   Timer? _debounce;
@@ -158,7 +161,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<Product>>(
-              stream: _service.watchProducts(),
+              stream: kIsWeb
+                  ? _service.watchProducts()
+                  : _repository.watchProducts(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
