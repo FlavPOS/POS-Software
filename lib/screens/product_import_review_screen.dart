@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/product_import_parse_result.dart';
 import '../models/product_import_row.dart';
+import '../services/product_import_save_service.dart';
 
 enum _ReviewFilter { all, valid, warnings, errors }
 
@@ -17,6 +18,11 @@ class ProductImportReviewScreen extends StatefulWidget {
 
 class _ProductImportReviewScreenState extends State<ProductImportReviewScreen> {
   _ReviewFilter _filter = _ReviewFilter.all;
+
+  final ProductImportSaveService _importSaveService =
+      ProductImportSaveService.instance;
+
+  bool _saving = false;
 
   List<ProductImportRow> get _filteredRows {
     switch (_filter) {
@@ -66,16 +72,132 @@ class _ProductImportReviewScreenState extends State<ProductImportReviewScreen> {
     }
   }
 
-  void _showImportPendingMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Import saving will be connected next. '
-          '${widget.result.validRows} valid '
-          'product row(s) are ready.',
+  Future<void> _importValidProducts() async {
+    if (_saving || !widget.result.hasValidRows) {
+      return;
+    }
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Import Valid Products?'),
+              content: Text(
+                '${widget.result.validRows} valid '
+                'product row(s) will be imported.\n\n'
+                'Existing SKUs or barcodes will be '
+                'skipped and will not be overwritten.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext, false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext, true);
+                  },
+                  child: const Text('Import'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final result = await _importSaveService.importValidRows(widget.result);
+
+      if (!mounted) {
+        return;
+      }
+
+      final closeReview =
+          await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) {
+              final summary = result.summary;
+
+              return AlertDialog(
+                title: const Text('Product Import Results'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ImportResultLine(
+                      label: 'Imported',
+                      value: summary.imported,
+                    ),
+                    _ImportResultLine(label: 'Skipped', value: summary.skipped),
+                    _ImportResultLine(label: 'Failed', value: summary.failed),
+                    const Divider(height: 24),
+                    _ImportResultLine(
+                      label: 'Pictures Saved',
+                      value: summary.picturesSaved,
+                    ),
+                    _ImportResultLine(
+                      label: 'Pictures Missing',
+                      value: summary.picturesMissing,
+                    ),
+                    _ImportResultLine(
+                      label: 'Pictures Failed',
+                      value: summary.picturesFailed,
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext, false);
+                    },
+                    child: const Text('Stay on Review'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext, true);
+                    },
+                    child: const Text('Back to Products'),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          false;
+
+      if (closeReview && mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to complete the import: '
+            '$error',
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -93,14 +215,23 @@ class _ProductImportReviewScreenState extends State<ProductImportReviewScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: FilledButton.icon(
-            onPressed: widget.result.hasValidRows
-                ? _showImportPendingMessage
+            onPressed: widget.result.hasValidRows && !_saving
+                ? _importValidProducts
                 : null,
-            icon: const Icon(Icons.inventory_2_outlined),
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.inventory_2_outlined),
             label: Text(
-              'Import ${widget.result.validRows} '
-              'Valid Product'
-              '${widget.result.validRows == 1 ? '' : 's'}',
+              _saving
+                  ? 'Importing Products...'
+                  : 'Import '
+                        '${widget.result.validRows} '
+                        'Valid Product'
+                        '${widget.result.validRows == 1 ? '' : 's'}',
             ),
           ),
         ),
@@ -400,6 +531,32 @@ class _MessageSection extends StatelessWidget {
                 '• $message',
                 style: TextStyle(color: color, fontSize: 12),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportResultLine extends StatelessWidget {
+  const _ImportResultLine({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              color: Color(0xFF5B5CEB),
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
