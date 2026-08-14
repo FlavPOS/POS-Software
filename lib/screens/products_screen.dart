@@ -778,6 +778,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
           'Products',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
+        actions: <Widget>[
+          StreamBuilder<DatabaseEvent>(
+            stream: _service.connectedRef.onValue,
+            builder: (context, snapshot) {
+              final online = snapshot.data?.snapshot.value == true;
+
+              return _ProductSyncStatus(online: online);
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
       floatingActionButton: _selectionMode
           ? null
@@ -847,49 +858,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
             ),
       body: Column(
         children: [
-          StreamBuilder<DatabaseEvent>(
-            stream: _service.connectedRef.onValue,
-            builder: (context, snapshot) {
-              final online = snapshot.data?.snapshot.value == true;
-
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                color: online
-                    ? const Color(0xFFECFDF5)
-                    : const Color(0xFFFFF7ED),
-                child: Row(
-                  children: [
-                    Icon(
-                      online
-                          ? Icons.cloud_done_outlined
-                          : Icons.cloud_off_outlined,
-                      size: 18,
-                      color: online
-                          ? const Color(0xFF047857)
-                          : const Color(0xFFC2410C),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      online
-                          ? 'Online - Live sync'
-                          : 'Offline - Changes will sync later',
-                      style: TextStyle(
-                        color: online
-                            ? const Color(0xFF047857)
-                            : const Color(0xFFC2410C),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -1041,6 +1009,8 @@ class _SelectionToolbar extends StatelessWidget {
     required this.onDeleteSelected,
   });
 
+  static const double _tabletBreakpoint = 600;
+
   final int selectedCount;
   final int visibleCount;
   final bool allVisibleSelected;
@@ -1050,66 +1020,246 @@ class _SelectionToolbar extends StatelessWidget {
   final VoidCallback onSelectAll;
   final VoidCallback? onDeleteSelected;
 
+  bool get _hasSelection => selectedCount > 0;
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < _tabletBreakpoint;
+
+        return Container(
+          width: double.infinity,
+          margin: EdgeInsets.fromLTRB(
+            compact ? 16 : 24,
+            0,
+            compact ? 16 : 24,
+            12,
+          ),
+          padding: EdgeInsets.all(compact ? 14 : 16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: <Color>[Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFC4B5FD)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x12000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: compact ? _buildPhoneToolbar() : _buildTabletToolbar(),
+        );
+      },
+    );
+  }
+
+  Widget _buildPhoneToolbar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _buildModeIcon(),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text(
+                'Selection Mode',
+                style: TextStyle(
+                  color: Color(0xFF4C1D95),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            _buildSelectedBadge(),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _buildSelectVisibleButton()),
+            const SizedBox(width: 8),
+            _buildCancelButton(),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_hasSelection)
+          SizedBox(width: double.infinity, child: _buildDeleteButton())
+        else
+          _buildEmptySelectionMessage(),
+      ],
+    );
+  }
+
+  Widget _buildTabletToolbar() {
+    return Row(
+      children: [
+        _buildModeIcon(),
+        const SizedBox(width: 9),
+        const Text(
+          'Selection Mode',
+          style: TextStyle(
+            color: Color(0xFF4C1D95),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 12),
+        _buildSelectedBadge(),
+        const Spacer(),
+        _buildSelectVisibleButton(),
+        const SizedBox(width: 8),
+        _buildCancelButton(),
+        const SizedBox(width: 8),
+        if (_hasSelection)
+          _buildDeleteButton()
+        else
+          const Text(
+            'Select products to continue',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildModeIcon() {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: const BoxDecoration(
+        color: Color(0xFFDDD6FE),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        Icons.checklist_rounded,
+        color: Color(0xFF6D28D9),
+        size: 19,
+      ),
+    );
+  }
+
+  Widget _buildSelectedBadge() {
+    final color = _hasSelection
+        ? const Color(0xFF6D28D9)
+        : const Color(0xFF6B7280);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: _hasSelection
+            ? const Color(0xFFEDE9FE)
+            : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        '$selectedCount selected',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectVisibleButton() {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF5B21B6),
+        side: const BorderSide(color: Color(0xFFC4B5FD)),
+      ),
+      onPressed: deleting || visibleCount == 0 ? null : onSelectAll,
+      icon: Icon(
+        allVisibleSelected
+            ? Icons.remove_done_outlined
+            : Icons.done_all_outlined,
+        size: 18,
+      ),
+      label: Text(
+        allVisibleSelected
+            ? 'Clear Visible'
+            : 'Select All Visible ($visibleCount)',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildCancelButton() {
+    return TextButton.icon(
+      onPressed: deleting ? null : onCancel,
+      icon: const Icon(Icons.close_rounded, size: 18),
+      label: const Text('Cancel'),
+    );
+  }
+
+  Widget _buildEmptySelectionMessage() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDE9FE),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFC4B5FD)),
+        color: Colors.white.withValues(alpha: 0.70),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 10,
-        runSpacing: 8,
+      child: const Row(
         children: [
-          Text(
-            '$selectedCount selected',
-            style: const TextStyle(
-              color: Color(0xFF5B21B6),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          TextButton(
-            onPressed: deleting || visibleCount == 0 ? null : onSelectAll,
+          Icon(Icons.touch_app_outlined, color: Color(0xFF6B7280), size: 19),
+          SizedBox(width: 9),
+          Expanded(
             child: Text(
-              allVisibleSelected
-                  ? 'Clear Visible'
-                  : 'Select All Visible '
-                        '($visibleCount)',
-            ),
-          ),
-          TextButton(
-            onPressed: deleting ? null : onCancel,
-            child: const Text('Cancel Selection'),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
-            ),
-            onPressed: deleting ? null : onDeleteSelected,
-            icon: deleting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.delete_outline),
-            label: Text(
-              deleting
-                  ? 'Deleting Products...'
-                  : 'Delete Selected '
-                        '($selectedCount)',
+              'Select products below to enable '
+              'bulk deletion.',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFB91C1C),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: deleting ? null : onDeleteSelected,
+      icon: deleting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.delete_outline, size: 19),
+      label: Text(
+        deleting
+            ? 'Deleting Products...'
+            : 'Delete $selectedCount Selected '
+                  'Product'
+                  '${selectedCount == 1 ? '' : 's'}',
+        style: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -1172,7 +1322,9 @@ class _ProductCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           onTap: onTap,
-          contentPadding: const EdgeInsets.all(14),
+          contentPadding: const EdgeInsets.fromLTRB(14, 13, 10, 13),
+          horizontalTitleGap: 14,
+          minLeadingWidth: 78,
           leading: _ProductThumbnail(product: product),
           title: Row(
             children: [
@@ -1314,39 +1466,78 @@ class _ProductThumbnailState extends State<_ProductThumbnail> {
     return _photoService.readPhotoBytes(photoPath);
   }
 
-  Widget _placeholder() {
-    return CircleAvatar(
-      backgroundColor: widget.product.active
-          ? const Color(0xFFEDE9FE)
-          : const Color(0xFFE5E7EB),
-      child: Icon(
-        Icons.inventory_2_outlined,
-        color: widget.product.active
-            ? const Color(0xFF6D28D9)
-            : const Color(0xFF6B7280),
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final tablet = screenWidth >= 600;
+
+    final imageWidth = tablet ? 76.0 : 64.0;
+
+    final imageHeight = tablet ? 84.0 : 72.0;
+
+    return SizedBox(
+      width: imageWidth,
+      height: imageHeight,
+      child: FutureBuilder<Uint8List?>(
+        future: _photoFuture,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+
+          if (bytes == null || bytes.isEmpty) {
+            return _placeholder(width: imageWidth, height: imageHeight);
+          }
+
+          return Container(
+            width: imageWidth,
+            height: imageHeight,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(
+                bytes,
+                width: imageWidth,
+                height: imageHeight,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (context, error, stackTrace) {
+                  return _placeholder(width: imageWidth, height: imageHeight);
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _photoFuture,
-      builder: (context, snapshot) {
-        final bytes = snapshot.data;
-
-        if (bytes == null || bytes.isEmpty) {
-          return _placeholder();
-        }
-
-        return CircleAvatar(
-          backgroundColor: widget.product.active
-              ? const Color(0xFFEDE9FE)
-              : const Color(0xFFE5E7EB),
-          backgroundImage: MemoryImage(bytes),
-          onBackgroundImageError: (exception, stackTrace) {},
-        );
-      },
+  Widget _placeholder({required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: widget.product.active
+            ? const Color(0xFFEDE9FE)
+            : const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.product.active
+              ? const Color(0xFFC4B5FD)
+              : const Color(0xFFD1D5DB),
+        ),
+      ),
+      child: Icon(
+        Icons.inventory_2_outlined,
+        size: 30,
+        color: widget.product.active
+            ? const Color(0xFF6D28D9)
+            : const Color(0xFF6B7280),
+      ),
     );
   }
 }
@@ -1397,6 +1588,80 @@ class _EmptyProducts extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductSyncStatus extends StatelessWidget {
+  const _ProductSyncStatus({required this.online});
+
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final compact = screenWidth < 600;
+
+    final backgroundColor = online
+        ? const Color(0xFFECFDF5)
+        : const Color(0xFFFFF7ED);
+
+    final foregroundColor = online
+        ? const Color(0xFF047857)
+        : const Color(0xFFC2410C);
+
+    final borderColor = online
+        ? const Color(0xFFA7F3D0)
+        : const Color(0xFFFED7AA);
+
+    final label = online
+        ? compact
+              ? 'Online'
+              : 'Online - Live sync'
+        : compact
+        ? 'Offline'
+        : 'Offline - Sync later';
+
+    return Center(
+      child: Semantics(
+        label: online
+            ? 'Product synchronization is online'
+            : 'Product synchronization is offline',
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 9 : 11,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                size: 16,
+                color: foregroundColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
