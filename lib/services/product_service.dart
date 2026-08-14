@@ -115,6 +115,21 @@ class ProductService {
     await _db.ref().update(updates);
   }
 
+  Future<void> delete(Product product) async {
+    final normalizedSku = product.sku.trim().toUpperCase();
+
+    final normalizedBarcode = product.barcode?.trim() ?? '';
+
+    final updates = <String, Object?>{
+      'products/${product.id}': null,
+      if (normalizedSku.isNotEmpty) 'productSkuIndex/$normalizedSku': null,
+      if (normalizedBarcode.isNotEmpty)
+        'productBarcodeIndex/$normalizedBarcode': null,
+    };
+
+    await _db.ref().update(updates);
+  }
+
   Future<void> _claim(DatabaseReference ref, String id, String field) async {
     final result = await ref.runTransaction((current) {
       if (current == null || current == id) return Transaction.success(id);

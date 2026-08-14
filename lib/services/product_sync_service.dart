@@ -81,7 +81,18 @@ class ProductSyncService {
       await _repository.markSyncing(product.id);
 
       if (product.isDeleted) {
-        await _productsReference.child(product.id).remove();
+        final normalizedSku = product.sku.trim().toUpperCase();
+
+        final normalizedBarcode = product.barcode?.trim() ?? '';
+
+        await _firebase.ref().update(<String, Object?>{
+          'products/${product.id}': null,
+          if (normalizedSku.isNotEmpty) 'productSkuIndex/$normalizedSku': null,
+          if (normalizedBarcode.isNotEmpty)
+            'productBarcodeIndex/'
+                    '$normalizedBarcode':
+                null,
+        });
       } else {
         await _productsReference.child(product.id).update(product.toFirebase());
       }
