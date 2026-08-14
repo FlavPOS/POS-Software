@@ -55,7 +55,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _stock = TextEditingController(text: p?.beginningStock.toString() ?? '0');
     _active = p?.active ?? true;
 
-    if (!kIsWeb && p != null) {
+    if (p != null) {
       _loadExistingPhoto();
     }
   }
@@ -63,7 +63,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   Future<void> _loadExistingPhoto() async {
     final product = widget.product;
 
-    if (product == null || kIsWeb) {
+    if (product == null) {
       return;
     }
 
@@ -115,19 +115,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _selectProductPhoto() async {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Permanent product pictures are available '
-            'in the Android application.',
-          ),
-        ),
-      );
-
-      return;
-    }
-
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       showDragHandle: true,
@@ -144,8 +131,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(
-                    'The picture will be saved only '
-                    'on this device.',
+                    'The picture will be saved locally '
+                    'on this device or browser.',
                   ),
                 ),
                 ListTile(
@@ -295,6 +282,38 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           oldSku: existingProduct?.sku,
           oldBarcode: existingProduct?.barcode,
         );
+
+        String? webPhotoPath = await _photoService.getPhotoPath(product.sku);
+
+        final oldWebSku = existingProduct?.sku.trim().toUpperCase();
+
+        if (oldWebSku != null &&
+            oldWebSku.isNotEmpty &&
+            oldWebSku != product.sku) {
+          await _photoService.movePhotoToNewSku(
+            oldSku: oldWebSku,
+            newSku: product.sku,
+          );
+
+          webPhotoPath = await _photoService.getPhotoPath(product.sku);
+        }
+
+        if (_removeExistingPhoto) {
+          await _photoService.deletePhoto(product.sku);
+
+          webPhotoPath = null;
+        }
+
+        if (_selectedPhoto != null) {
+          webPhotoPath = await _photoService.savePhoto(
+            sku: product.sku,
+            selectedPhoto: _selectedPhoto!,
+          );
+        }
+
+        if (webPhotoPath != null) {
+          _photoBytes = await _photoService.readPhotoBytes(webPhotoPath);
+        }
       } else {
         await _syncService.saveProduct(product);
 
@@ -422,7 +441,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ),
           SizedBox(height: 3),
           Text(
-            'Saved only on this device',
+            'Saved only on this device/browser',
             style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
           ),
         ],
