@@ -9,6 +9,10 @@ import 'package:uuid/uuid.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_sync_service.dart';
 
+import 'package:image_picker/image_picker.dart';
+
+import '../services/product_photo_service.dart';
+
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.product});
   final Product? product;
@@ -20,6 +24,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final ProductSyncService _syncService = ProductSyncService.instance;
 
   static const Uuid _uuid = Uuid();
+
+  final ProductPhotoService _photoService = ProductPhotoService.instance;
+
+  XFile? _selectedPhoto;
+  Uint8List? _photoBytes;
+  bool _removeExistingPhoto = false;
+  bool _loadingPhoto = false;
   final _formKey = GlobalKey<FormState>();
   final _service = ProductService();
   late final TextEditingController _name,
@@ -43,6 +54,36 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
     _stock = TextEditingController(text: p?.beginningStock.toString() ?? '0');
     _active = p?.active ?? true;
+
+    if (!kIsWeb && p != null) {
+      _loadExistingPhoto();
+    }
+  }
+
+  Future<void> _loadExistingPhoto() async {
+    final product = widget.product;
+
+    if (product == null || kIsWeb) {
+      return;
+    }
+
+    setState(() {
+      _loadingPhoto = true;
+    });
+
+    final photoPath =
+        product.localPhotoPath ?? await _photoService.getPhotoPath(product.sku);
+
+    final photoBytes = await _photoService.readPhotoBytes(photoPath);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _photoBytes = photoBytes;
+      _loadingPhoto = false;
+    });
   }
 
   @override
@@ -71,6 +112,94 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         : n < 0
         ? 'Cannot be negative'
         : null;
+  }
+
+  Future<void> _selectProductPhoto() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Permanent product pictures are available '
+            'in the Android application.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ListTile(
+                  title: Text(
+                    'Product Picture',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    'The picture will be saved only '
+                    'on this device.',
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Choose from Gallery'),
+                  onTap: () {
+                    Navigator.pop(context, ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: const Text('Take a Picture'),
+                  onTap: () {
+                    Navigator.pop(context, ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (source == null) {
+      return;
+    }
+
+    final selectedPhoto = source == ImageSource.camera
+        ? await _photoService.takePhoto()
+        : await _photoService.pickFromGallery();
+
+    if (selectedPhoto == null) {
+      return;
+    }
+
+    final selectedBytes = await selectedPhoto.readAsBytes();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedPhoto = selectedPhoto;
+      _photoBytes = selectedBytes;
+      _removeExistingPhoto = false;
+    });
+  }
+
+  void _removeProductPhoto() {
+    setState(() {
+      _selectedPhoto = null;
+      _photoBytes = null;
+      _removeExistingPhoto = true;
+    });
   }
 
   Future<void> _save() async {
@@ -168,6 +297,39 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         );
       } else {
         await _syncService.saveProduct(product);
+
+        String? savedPhotoPath = existingProduct?.localPhotoPath;
+
+        final oldSku = existingProduct?.sku.trim().toUpperCase();
+
+        if (oldSku != null && oldSku.isNotEmpty && oldSku != product.sku) {
+          await _photoService.movePhotoToNewSku(
+            oldSku: oldSku,
+            newSku: product.sku,
+          );
+
+          savedPhotoPath = await _photoService.getPhotoPath(product.sku);
+        }
+
+        if (_removeExistingPhoto) {
+          await _photoService.deletePhoto(product.sku);
+
+          savedPhotoPath = null;
+        }
+
+        if (_selectedPhoto != null) {
+          savedPhotoPath = await _photoService.savePhoto(
+            sku: product.sku,
+            selectedPhoto: _selectedPhoto!,
+          );
+        }
+
+        if (savedPhotoPath != existingProduct?.localPhotoPath) {
+          await ProductRepository.instance.updateLocalPhotoPath(
+            productId: product.id,
+            localPhotoPath: savedPhotoPath,
+          );
+        }
       }
 
       if (!mounted) {
@@ -218,6 +380,103 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  Widget _buildPhotoSection() {
+    final hasPhoto = _photoBytes != null;
+
+    Widget photoContent;
+
+    if (_loadingPhoto) {
+      photoContent = const Center(child: CircularProgressIndicator());
+    } else if (hasPhoto) {
+      photoContent = Image.memory(
+        _photoBytes!,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              size: 52,
+              color: Color(0xFF6B7280),
+            ),
+          );
+        },
+      );
+    } else {
+      photoContent = const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 52,
+            color: Color(0xFF6D28D9),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Add product picture',
+            style: TextStyle(
+              color: Color(0xFF6D28D9),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: 3),
+          Text(
+            'Saved only on this device',
+            style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Stack(
+          children: [
+            InkWell(
+              onTap: _selectProductPhoto,
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                width: double.infinity,
+                height: 190,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFD1D5DB)),
+                ),
+                child: photoContent,
+              ),
+            ),
+            if (hasPhoto)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Material(
+                  color: Colors.black54,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: 'Remove picture',
+                    onPressed: _removeProductPhoto,
+                    color: Colors.white,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: _selectProductPhoto,
+          icon: Icon(
+            hasPhoto ? Icons.edit_outlined : Icons.add_photo_alternate_outlined,
+          ),
+          label: Text(hasPhoto ? 'Change Picture' : 'Select Picture'),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -228,6 +487,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildPhotoSection(),
+          const SizedBox(height: 14),
           TextFormField(
             controller: _name,
             decoration: const InputDecoration(
