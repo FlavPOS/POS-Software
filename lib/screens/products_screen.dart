@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_delete_result.dart';
 import '../models/product_import_package.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_delete_service.dart';
@@ -31,6 +32,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final ProductDeleteService _deleteService = ProductDeleteService.instance;
 
   final Set<String> _deletingProductIds = <String>{};
+
+  bool _selectionMode = false;
+
+  final Set<String> _selectedProductIds = <String>{};
+
+  bool _deletingSelection = false;
 
   final ProductImportDownloadService _importDownloadService =
       ProductImportDownloadService.instance;
@@ -377,6 +384,272 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
+  void _startSelectionMode() {
+    if (_deletingSelection) {
+      return;
+    }
+
+    setState(() {
+      _selectionMode = true;
+      _selectedProductIds.clear();
+    });
+  }
+
+  void _cancelSelectionMode() {
+    if (_deletingSelection) {
+      return;
+    }
+
+    setState(() {
+      _selectionMode = false;
+      _selectedProductIds.clear();
+    });
+  }
+
+  void _toggleProductSelection(Product product) {
+    if (_deletingSelection) {
+      return;
+    }
+
+    setState(() {
+      if (!_selectedProductIds.add(product.id)) {
+        _selectedProductIds.remove(product.id);
+      }
+    });
+  }
+
+  bool _areAllVisibleSelected(List<Product> visibleProducts) {
+    if (visibleProducts.isEmpty) {
+      return false;
+    }
+
+    return visibleProducts.every((product) {
+      return _selectedProductIds.contains(product.id);
+    });
+  }
+
+  void _toggleAllVisible(List<Product> visibleProducts) {
+    if (_deletingSelection || visibleProducts.isEmpty) {
+      return;
+    }
+
+    final visibleIds = visibleProducts.map((product) => product.id).toSet();
+
+    final allVisibleSelected = visibleIds.every(_selectedProductIds.contains);
+
+    setState(() {
+      if (allVisibleSelected) {
+        _selectedProductIds.removeAll(visibleIds);
+      } else {
+        _selectedProductIds.addAll(visibleIds);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedProducts(List<Product> allProducts) async {
+    if (_deletingSelection || _selectedProductIds.isEmpty) {
+      return;
+    }
+
+    final selectedProducts = allProducts
+        .where((product) => _selectedProductIds.contains(product.id))
+        .toList();
+
+    if (selectedProducts.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No selected products were found.')),
+      );
+
+      return;
+    }
+
+    final count = selectedProducts.length;
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: Text(
+                'Delete $count selected '
+                'product${count == 1 ? '' : 's'}?',
+              ),
+              content: const Text(
+                'The selected products will be '
+                'removed from the active product '
+                'list. Their saved pictures will '
+                'also be removed.\n\n'
+                'This action cannot be undone '
+                'from this screen.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext, false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB91C1C),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(dialogContext, true);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(
+                    'Delete $count '
+                    'Product${count == 1 ? '' : 's'}',
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _deletingSelection = true;
+    });
+
+    try {
+      final result = await _deleteService.deleteProducts(selectedProducts);
+
+      if (!mounted) {
+        return;
+      }
+
+      final deletedIds = result.items
+          .where((item) => item.deleted)
+          .map((item) => item.product.id)
+          .toSet();
+
+      setState(() {
+        _selectedProductIds.removeAll(deletedIds);
+
+        if (_selectedProductIds.isEmpty) {
+          _selectionMode = false;
+        }
+      });
+
+      await _showDeleteSelectedResults(result);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to delete the selected '
+            'products: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingSelection = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showDeleteSelectedResults(ProductDeleteResult result) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final failedItems = result.items.where((item) => item.failed).toList();
+
+        final pictureFailures = result.items
+            .where((item) => item.pictureFailed)
+            .toList();
+
+        return AlertDialog(
+          title: const Text('Product Deletion Results'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _DeleteResultLine(label: 'Selected', value: result.total),
+                _DeleteResultLine(label: 'Deleted', value: result.deleted),
+                _DeleteResultLine(label: 'Failed', value: result.failed),
+                const Divider(height: 24),
+                _DeleteResultLine(
+                  label: 'Pictures Deleted',
+                  value: result.picturesDeleted,
+                ),
+                _DeleteResultLine(
+                  label: 'Picture Failures',
+                  value: result.pictureFailures,
+                ),
+                if (failedItems.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Failed Products',
+                    style: TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...failedItems.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        '• ${item.product.name}\n'
+                        '  ${item.message}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+                if (pictureFailures.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Picture Cleanup Failures',
+                    style: TextStyle(
+                      color: Color(0xFFC2410C),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...pictureFailures.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        '• ${item.product.name}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _deleteOneProduct(Product product) async {
     if (_deletingProductIds.contains(product.id)) {
       return;
@@ -506,58 +779,72 @@ class _ProductsScreenState extends State<ProductsScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      floatingActionButton: PopupMenuButton<String>(
-        tooltip: 'Product actions',
-        position: PopupMenuPosition.over,
-        onSelected: (value) {
-          switch (value) {
-            case 'add':
-              _openForm();
-              break;
+      floatingActionButton: _selectionMode
+          ? null
+          : PopupMenuButton<String>(
+              tooltip: 'Product actions',
+              position: PopupMenuPosition.over,
+              onSelected: (value) {
+                switch (value) {
+                  case 'add':
+                    _openForm();
+                    break;
 
-            case 'import':
-              _selectImportFile();
-              break;
+                  case 'import':
+                    _selectImportFile();
+                    break;
 
-            case 'template':
-              _downloadImportTemplate();
-              break;
-          }
-        },
-        itemBuilder: (context) {
-          return const <PopupMenuEntry<String>>[
-            PopupMenuItem<String>(
-              value: 'add',
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.add),
-                title: Text('Add Manually'),
+                  case 'template':
+                    _downloadImportTemplate();
+                    break;
+
+                  case 'select':
+                    _startSelectionMode();
+                    break;
+                }
+              },
+              itemBuilder: (context) {
+                return const <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'add',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.add),
+                      title: Text('Add Manually'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'import',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.upload_file_outlined),
+                      title: Text('Import Products'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'template',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.download_outlined),
+                      title: Text('Download Sample Template'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'select',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.checklist_outlined),
+                      title: Text('Select Products'),
+                    ),
+                  ),
+                ];
+              },
+              child: const FloatingActionButton.extended(
+                onPressed: null,
+                icon: Icon(Icons.add),
+                label: Text('Product Actions'),
               ),
             ),
-            PopupMenuItem<String>(
-              value: 'import',
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.upload_file_outlined),
-                title: Text('Import Products'),
-              ),
-            ),
-            PopupMenuItem<String>(
-              value: 'template',
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.download_outlined),
-                title: Text('Download Sample Template'),
-              ),
-            ),
-          ];
-        },
-        child: const FloatingActionButton.extended(
-          onPressed: null,
-          icon: Icon(Icons.add),
-          label: Text('Product Actions'),
-        ),
-      ),
       body: Column(
         children: [
           StreamBuilder<DatabaseEvent>(
@@ -656,28 +943,170 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   );
                 }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  itemCount: products.length,
-                  separatorBuilder: (context, index) {
-                    return const SizedBox(height: 8);
-                  },
-                  itemBuilder: (context, index) {
-                    final product = products[index];
+                return Column(
+                  children: [
+                    if (_selectionMode)
+                      _SelectionToolbar(
+                        selectedCount: _selectedProductIds.length,
+                        visibleCount: products.length,
+                        allVisibleSelected: _areAllVisibleSelected(products),
+                        deleting: _deletingSelection,
+                        onCancel: _cancelSelectionMode,
+                        onSelectAll: () {
+                          _toggleAllVisible(products);
+                        },
+                        onDeleteSelected: _selectedProductIds.isEmpty
+                            ? null
+                            : () {
+                                _deleteSelectedProducts(snapshot.data!);
+                              },
+                      ),
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                        itemCount: products.length,
+                        separatorBuilder: (context, index) {
+                          return const SizedBox(height: 8);
+                        },
+                        itemBuilder: (context, index) {
+                          final product = products[index];
 
-                    return _ProductCard(
-                      product: product,
-                      deleting: _deletingProductIds.contains(product.id),
-                      onTap: () {
-                        _openForm(product: product);
-                      },
-                      onDelete: () {
-                        _deleteOneProduct(product);
-                      },
-                    );
-                  },
+                          return _ProductCard(
+                            product: product,
+                            deleting: _deletingProductIds.contains(product.id),
+                            selectionMode: _selectionMode,
+                            selected: _selectedProductIds.contains(product.id),
+                            onTap: () {
+                              if (_selectionMode) {
+                                _toggleProductSelection(product);
+                              } else {
+                                _openForm(product: product);
+                              }
+                            },
+                            onSelectionChanged: () {
+                              _toggleProductSelection(product);
+                            },
+                            onDelete: () {
+                              _deleteOneProduct(product);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteResultLine extends StatelessWidget {
+  const _DeleteResultLine({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              color: Color(0xFF5B21B6),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionToolbar extends StatelessWidget {
+  const _SelectionToolbar({
+    required this.selectedCount,
+    required this.visibleCount,
+    required this.allVisibleSelected,
+    required this.deleting,
+    required this.onCancel,
+    required this.onSelectAll,
+    required this.onDeleteSelected,
+  });
+
+  final int selectedCount;
+  final int visibleCount;
+  final bool allVisibleSelected;
+  final bool deleting;
+
+  final VoidCallback onCancel;
+  final VoidCallback onSelectAll;
+  final VoidCallback? onDeleteSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE9FE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFC4B5FD)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 10,
+        runSpacing: 8,
+        children: [
+          Text(
+            '$selectedCount selected',
+            style: const TextStyle(
+              color: Color(0xFF5B21B6),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          TextButton(
+            onPressed: deleting || visibleCount == 0 ? null : onSelectAll,
+            child: Text(
+              allVisibleSelected
+                  ? 'Clear Visible'
+                  : 'Select All Visible '
+                        '($visibleCount)',
+            ),
+          ),
+          TextButton(
+            onPressed: deleting ? null : onCancel,
+            child: const Text('Cancel Selection'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB91C1C),
+            ),
+            onPressed: deleting ? null : onDeleteSelected,
+            icon: deleting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.delete_outline),
+            label: Text(
+              deleting
+                  ? 'Deleting Products...'
+                  : 'Delete Selected '
+                        '($selectedCount)',
             ),
           ),
         ],
@@ -713,13 +1142,19 @@ class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.product,
     required this.deleting,
+    required this.selectionMode,
+    required this.selected,
     required this.onTap,
+    required this.onSelectionChanged,
     required this.onDelete,
   });
 
   final Product product;
   final bool deleting;
+  final bool selectionMode;
+  final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onSelectionChanged;
   final VoidCallback onDelete;
 
   @override
@@ -727,7 +1162,13 @@ class _ProductCard extends StatelessWidget {
     return Opacity(
       opacity: product.active ? 1 : 0.58,
       child: Card(
-        color: Colors.white,
+        color: selected ? const Color(0xFFF5F3FF) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: selected
+              ? const BorderSide(color: Color(0xFF7C3AED), width: 1.5)
+              : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           onTap: onTap,
@@ -770,7 +1211,16 @@ class _ProductCard extends StatelessWidget {
               '   Stock: ${product.currentStock}',
             ),
           ),
-          trailing: deleting
+          trailing: selectionMode
+              ? Checkbox(
+                  value: selected,
+                  onChanged: deleting
+                      ? null
+                      : (_) {
+                          onSelectionChanged();
+                        },
+                )
+              : deleting
               ? const SizedBox(
                   width: 24,
                   height: 24,
