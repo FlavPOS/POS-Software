@@ -10,9 +10,11 @@ import '../repositories/product_repository.dart';
 import '../services/product_photo_service.dart';
 import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
+import '../services/product_import_excel_service.dart';
 import '../services/product_import_package_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
+import 'product_import_review_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -31,6 +33,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   final ProductImportPackageService _importPackageService =
       ProductImportPackageService.instance;
+
+  final ProductImportExcelService _importExcelService =
+      ProductImportExcelService.instance;
 
   final ProductImportPickerService _importPickerService =
       ProductImportPickerService.instance;
@@ -252,6 +257,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             FilledButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
+
+                _previewParsedProducts(importPackage);
               },
               child: const Text('Preview Products'),
             ),
@@ -259,6 +266,110 @@ class _ProductsScreenState extends State<ProductsScreen> {
         );
       },
     );
+  }
+
+  Future<void> _previewParsedProducts(
+    ProductImportPackage importPackage,
+  ) async {
+    try {
+      final result = _importExcelService.parse(importPackage);
+
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Product Import Preview'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ImportTotalRow(
+                  label: 'Products Found',
+                  value: result.totalRows,
+                ),
+                _ImportTotalRow(label: 'Valid Rows', value: result.validRows),
+                _ImportTotalRow(
+                  label: 'Rows with Warnings',
+                  value: result.warningRows,
+                ),
+                _ImportTotalRow(
+                  label: 'Rows with Errors',
+                  value: result.errorRows,
+                ),
+                _ImportTotalRow(
+                  label: 'Pictures Matched',
+                  value: result.picturesMatched,
+                ),
+                _ImportTotalRow(
+                  label: 'Pictures Missing',
+                  value: result.picturesMissing,
+                ),
+                if (result.workbookWarnings.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  ...result.workbookWarnings.map((warning) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '• $warning',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Close'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) {
+                        return ProductImportReviewScreen(result: result);
+                      },
+                    ),
+                  );
+                },
+                child: const Text('Review Rows'),
+              ),
+            ],
+          );
+        },
+      );
+    } on ProductImportExcelException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to preview the products: '
+            '$error',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openForm({Product? product}) async {
@@ -447,6 +558,29 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportTotalRow extends StatelessWidget {
+  const _ImportTotalRow({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            value.toString(),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ],
       ),
