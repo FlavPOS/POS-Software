@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_photo_service.dart';
+import '../services/product_import_download_service.dart';
+import '../services/product_import_picker_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 
@@ -20,7 +22,13 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   final ProductService _service = ProductService();
   final ProductRepository _repository = ProductRepository.instance;
+
+  final ProductImportDownloadService _importDownloadService =
+      ProductImportDownloadService.instance;
   final TextEditingController _searchController = TextEditingController();
+
+  final ProductImportPickerService _importPickerService =
+      ProductImportPickerService.instance;
 
   Timer? _debounce;
   String _query = '';
@@ -69,6 +77,128 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }).toList();
   }
 
+  Future<void> _downloadImportTemplate() async {
+    try {
+      final result = await _importDownloadService.downloadTemplate();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result == ProductTemplateDownloadResult.cancelled) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product import template saved successfully.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save the import template: $error')),
+      );
+    }
+  }
+
+  Future<void> _selectImportFile() async {
+    try {
+      final file = await _importPickerService.pickFile();
+
+      if (file == null || !mounted) {
+        return;
+      }
+
+      final shouldContinue =
+          await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('Import File Selected'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'File',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(file.fileName),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Type',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(file.displayType),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Size',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(file.formattedSize),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext, false);
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext, true);
+                    },
+                    child: const Text('Continue'),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          false;
+
+      if (!shouldContinue || !mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${file.fileName} is ready '
+            'for package validation.',
+          ),
+        ),
+      );
+    } on ProductImportPickerException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to open the selected file: '
+            '$error',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _openForm({Product? product}) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -88,10 +218,57 @@ class _ProductsScreenState extends State<ProductsScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Product'),
+      floatingActionButton: PopupMenuButton<String>(
+        tooltip: 'Product actions',
+        position: PopupMenuPosition.over,
+        onSelected: (value) {
+          switch (value) {
+            case 'add':
+              _openForm();
+              break;
+
+            case 'import':
+              _selectImportFile();
+              break;
+
+            case 'template':
+              _downloadImportTemplate();
+              break;
+          }
+        },
+        itemBuilder: (context) {
+          return const <PopupMenuEntry<String>>[
+            PopupMenuItem<String>(
+              value: 'add',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.add),
+                title: Text('Add Manually'),
+              ),
+            ),
+            PopupMenuItem<String>(
+              value: 'import',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.upload_file_outlined),
+                title: Text('Import Products'),
+              ),
+            ),
+            PopupMenuItem<String>(
+              value: 'template',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.download_outlined),
+                title: Text('Download Sample Template'),
+              ),
+            ),
+          ];
+        },
+        child: const FloatingActionButton.extended(
+          onPressed: null,
+          icon: Icon(Icons.add),
+          label: Text('Product Actions'),
+        ),
       ),
       body: Column(
         children: [
