@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/product_import_package.dart';
 import '../repositories/product_repository.dart';
+import '../services/product_delete_service.dart';
 import '../services/product_photo_service.dart';
 import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
@@ -26,6 +27,10 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   final ProductService _service = ProductService();
   final ProductRepository _repository = ProductRepository.instance;
+
+  final ProductDeleteService _deleteService = ProductDeleteService.instance;
+
+  final Set<String> _deletingProductIds = <String>{};
 
   final ProductImportDownloadService _importDownloadService =
       ProductImportDownloadService.instance;
@@ -372,6 +377,116 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
+  Future<void> _deleteOneProduct(Product product) async {
+    if (_deletingProductIds.contains(product.id)) {
+      return;
+    }
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: Text('Delete "${product.name}"?'),
+              content: const Text(
+                'The product will be removed from '
+                'the active product list. The saved '
+                'product picture will also be removed.\n\n'
+                'This action cannot be undone from '
+                'this screen.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext, false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB91C1C),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(dialogContext, true);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete Product'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _deletingProductIds.add(product.id);
+    });
+
+    try {
+      final result = await _deleteService.deleteProducts(<Product>[product]);
+
+      if (!mounted) {
+        return;
+      }
+
+      final item = result.items.first;
+
+      if (item.deleted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              item.pictureFailed
+                  ? '${product.name} was deleted, '
+                        'but the picture cleanup failed.'
+                  : '${product.name} was deleted successfully.',
+            ),
+          ),
+        );
+      } else {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Product Not Deleted'),
+              content: Text(item.message),
+              actions: [
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to delete ${product.name}: '
+            '$error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingProductIds.remove(product.id);
+        });
+      }
+    }
+  }
+
   Future<void> _openForm({Product? product}) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -552,7 +667,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
                     return _ProductCard(
                       product: product,
-                      onTap: () => _openForm(product: product),
+                      deleting: _deletingProductIds.contains(product.id),
+                      onTap: () {
+                        _openForm(product: product);
+                      },
+                      onDelete: () {
+                        _deleteOneProduct(product);
+                      },
                     );
                   },
                 );
@@ -589,10 +710,17 @@ class _ImportTotalRow extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product, required this.onTap});
+  const _ProductCard({
+    required this.product,
+    required this.deleting,
+    required this.onTap,
+    required this.onDelete,
+  });
 
   final Product product;
+  final bool deleting;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -642,7 +770,52 @@ class _ProductCard extends StatelessWidget {
               '   Stock: ${product.currentStock}',
             ),
           ),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: deleting
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : PopupMenuButton<String>(
+                  tooltip: 'Product options',
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'edit':
+                        onTap();
+                        break;
+
+                      case 'delete':
+                        onDelete();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) {
+                    return const <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'edit',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Edit Product'),
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.delete_outline,
+                            color: Color(0xFFB91C1C),
+                          ),
+                          title: Text(
+                            'Delete Product',
+                            style: TextStyle(color: Color(0xFFB91C1C)),
+                          ),
+                        ),
+                      ),
+                    ];
+                  },
+                ),
         ),
       ),
     );
