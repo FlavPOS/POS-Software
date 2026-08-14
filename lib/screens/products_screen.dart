@@ -5,10 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_import_package.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_photo_service.dart';
 import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
+import '../services/product_import_package_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 
@@ -26,6 +28,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final ProductImportDownloadService _importDownloadService =
       ProductImportDownloadService.instance;
   final TextEditingController _searchController = TextEditingController();
+
+  final ProductImportPackageService _importPackageService =
+      ProductImportPackageService.instance;
 
   final ProductImportPickerService _importPickerService =
       ProductImportPickerService.instance;
@@ -168,14 +173,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${file.fileName} is ready '
-            'for package validation.',
-          ),
-        ),
-      );
+      final importPackage = _importPackageService.validate(file);
+
+      if (!mounted) {
+        return;
+      }
+
+      await _showPackageSummary(importPackage);
     } on ProductImportPickerException catch (error) {
       if (!mounted) {
         return;
@@ -197,6 +201,64 @@ class _ProductsScreenState extends State<ProductsScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _showPackageSummary(ProductImportPackage importPackage) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Import Package Validated'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Workbook',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(importPackage.workbookFileName),
+              const SizedBox(height: 14),
+              const Text(
+                'Pictures Found',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(importPackage.pictureCount.toString()),
+              const SizedBox(height: 14),
+              const Text(
+                'Package Warnings',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(importPackage.warnings.length.toString()),
+              if (importPackage.warnings.isNotEmpty)
+                ...importPackage.warnings.map(
+                  (warning) => Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '• $warning',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Preview Products'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _openForm({Product? product}) async {
