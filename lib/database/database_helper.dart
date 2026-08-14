@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String databaseName = 'simple_pos.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 2;
 
   static const String productsTable = 'products';
 
@@ -65,6 +65,38 @@ class DatabaseHelper {
       await _createProductsTable(database);
       await _createProductIndexes(database);
     }
+
+    if (oldVersion < 2) {
+      final columns = await database.rawQuery(
+        'PRAGMA table_info($productsTable)',
+      );
+
+      final existingColumns = columns
+          .map((column) => column['name']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      Future<void> addColumn(String name, String definition) async {
+        if (existingColumns.contains(name)) {
+          return;
+        }
+
+        await database.execute(
+          'ALTER TABLE $productsTable '
+          'ADD COLUMN $name $definition',
+        );
+      }
+
+      await addColumn('minimum_stock', 'INTEGER NOT NULL DEFAULT 0');
+
+      await addColumn('maximum_stock', 'INTEGER NOT NULL DEFAULT 0');
+
+      await addColumn('category', 'TEXT');
+
+      await addColumn('subcategory', 'TEXT');
+
+      await addColumn('product_class', 'TEXT');
+    }
   }
 
   Future<void> _createProductsTable(Database database) async {
@@ -78,6 +110,11 @@ class DatabaseHelper {
         selling_price REAL NOT NULL DEFAULT 0,
         beginning_stock INTEGER NOT NULL DEFAULT 0,
         current_stock INTEGER NOT NULL DEFAULT 0,
+        minimum_stock INTEGER NOT NULL DEFAULT 0,
+        maximum_stock INTEGER NOT NULL DEFAULT 0,
+        category TEXT,
+        subcategory TEXT,
+        product_class TEXT,
         active INTEGER NOT NULL DEFAULT 1,
         local_photo_path TEXT,
         created_at INTEGER NOT NULL,

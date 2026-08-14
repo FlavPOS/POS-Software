@@ -38,9 +38,60 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _barcode,
       _cost,
       _selling,
-      _stock;
+      _stock,
+      _minimumStock,
+      _maximumStock;
   late bool _active;
+
+  String? _category;
+  String? _subcategory;
+  String? _productClass;
+
   bool _saving = false;
+
+  static const List<String> _categories = [
+    'Beverages',
+    'Food',
+    'Health',
+    'Beauty',
+    'Household',
+    'General Merchandise',
+  ];
+
+  static const Map<String, List<String>> _subcategories = {
+    'Beverages': ['Soft Drinks', 'Water', 'Juice', 'Coffee and Tea'],
+    'Food': ['Snacks', 'Biscuits', 'Canned Goods'],
+    'Health': ['OTC', 'Vitamins', 'First Aid'],
+    'Beauty': ['Skin Care', 'Hair Care', 'Personal Care'],
+    'Household': ['Cleaning', 'Laundry', 'Kitchen'],
+    'General Merchandise': ['Accessories', 'Supplies', 'Others'],
+  };
+
+  static const Map<String, List<String>> _classes = {
+    'Soft Drinks': ['Carbonated Drinks', 'Energy Drinks', 'Sports Drinks'],
+    'Water': ['Purified Water', 'Mineral Water', 'Sparkling Water'],
+    'Juice': ['Fruit Juice', 'Juice Drink'],
+    'Coffee and Tea': ['Coffee', 'Tea', 'Ready to Drink'],
+    'Snacks': ['Chips', 'Nuts', 'Snack Mix'],
+    'Biscuits': ['Cookies', 'Crackers', 'Wafers'],
+    'Canned Goods': ['Meat', 'Fish', 'Vegetables'],
+    'OTC': ['Pain Relief', 'Cold and Flu', 'Digestive Care'],
+    'Vitamins': ['Multivitamins', 'Supplements', 'Minerals'],
+    'First Aid': ['Bandages', 'Antiseptics', 'Medical Supplies'],
+    'Skin Care': ['Face Care', 'Body Care', 'Sun Care'],
+    'Hair Care': ['Shampoo', 'Conditioner', 'Hair Treatment'],
+    'Personal Care': ['Deodorant', 'Oral Care', 'Bath Care'],
+    'Cleaning': ['Surface Cleaner', 'Disinfectant', 'Cleaning Tools'],
+    'Laundry': ['Detergent', 'Fabric Conditioner', 'Laundry Aid'],
+    'Kitchen': ['Dishwashing', 'Food Storage', 'Kitchen Tools'],
+    'Accessories': [
+      'Mobile Accessories',
+      'Personal Accessories',
+      'Travel Accessories',
+    ],
+    'Supplies': ['Office Supplies', 'Store Supplies', 'Packaging Supplies'],
+    'Others': ['Seasonal', 'Miscellaneous'],
+  };
   @override
   void initState() {
     super.initState();
@@ -52,7 +103,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _selling = TextEditingController(
       text: p?.sellingPrice.toStringAsFixed(2) ?? '',
     );
-    _stock = TextEditingController(text: p?.beginningStock.toString() ?? '0');
+    _stock = TextEditingController(text: p?.currentStock.toString() ?? '0');
+
+    _minimumStock = TextEditingController(
+      text: p?.minimumStock.toString() ?? '0',
+    );
+
+    _maximumStock = TextEditingController(
+      text: p == null
+          ? '0'
+          : p.maximumStock > 0
+          ? p.maximumStock.toString()
+          : p.currentStock.toString(),
+    );
+    _category = p?.category;
+    _subcategory = p?.subcategory;
+    _productClass = p?.productClass;
+
     _active = p?.active ?? true;
 
     if (p != null) {
@@ -88,7 +155,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _sku, _barcode, _cost, _selling, _stock]) {
+    for (final c in [
+      _name,
+      _sku,
+      _barcode,
+      _cost,
+      _selling,
+      _stock,
+      _minimumStock,
+      _maximumStock,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -181,7 +257,36 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     });
   }
 
-  void _removeProductPhoto() {
+  Future<void> _removeProductPhoto() async {
+    final shouldRemove =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Remove product image?'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context, false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(context, true);
+                  },
+                  child: const Text('Remove'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!shouldRemove || !mounted) {
+      return;
+    }
+
     setState(() {
       _selectedPhoto = null;
       _photoBytes = null;
@@ -198,39 +303,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     final sellingPrice = double.parse(_selling.text.trim());
 
-    if (sellingPrice < costPrice) {
-      final continueSaving =
-          await showDialog<bool>(
-            context: context,
-            builder: (context) {
-              return AlertDialog(
-                title: const Text('Selling below cost'),
-                content: const Text(
-                  'Selling price is lower than cost price. '
-                  'Do you want to continue?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context, false);
-                    },
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context, true);
-                    },
-                    child: const Text('Continue'),
-                  ),
-                ],
-              );
-            },
-          ) ??
-          false;
-
-      if (!continueSaving) {
-        return;
-      }
+    if (!mounted) {
+      return;
     }
 
     setState(() {
@@ -241,7 +315,33 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       final now = DateTime.now().millisecondsSinceEpoch;
       final existingProduct = widget.product;
 
-      final beginningStock = int.parse(_stock.text.trim());
+      final currentStock = int.parse(_stock.text.trim());
+
+      final minimumStock = int.parse(_minimumStock.text.trim());
+
+      final maximumStock = int.parse(_maximumStock.text.trim());
+
+      if (minimumStock > maximumStock) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Minimum stock cannot be greater than maximum stock.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      if (currentStock > maximumStock) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Current stock cannot exceed maximum stock.'),
+          ),
+        );
+
+        return;
+      }
 
       final normalizedSku = _sku.text.trim().toUpperCase();
 
@@ -256,10 +356,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         barcode: normalizedBarcode,
         costPrice: costPrice,
         sellingPrice: sellingPrice,
-        beginningStock: beginningStock,
-        currentStock: existingProduct == null
-            ? beginningStock
-            : existingProduct.currentStock,
+        beginningStock: existingProduct?.beginningStock ?? currentStock,
+        currentStock: currentStock,
+        minimumStock: minimumStock,
+        maximumStock: maximumStock,
+        category: _category,
+        subcategory: _subcategory,
+        productClass: _productClass,
         active: _active,
         localPhotoPath: existingProduct?.localPhotoPath,
         createdAt: existingProduct?.createdAt ?? now,
@@ -278,6 +381,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           costPrice: product.costPrice,
           sellingPrice: product.sellingPrice,
           beginningStock: product.beginningStock,
+          currentStock: product.currentStock,
+          minimumStock: product.minimumStock,
+          maximumStock: product.maximumStock,
+          category: product.category,
+          subcategory: product.subcategory,
+          productClass: product.productClass,
           active: product.active,
           oldSku: existingProduct?.sku,
           oldBarcode: existingProduct?.barcode,
@@ -399,6 +508,113 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  double get _grossMargin {
+    final cost = double.tryParse(_cost.text.trim()) ?? 0;
+
+    final selling = double.tryParse(_selling.text.trim()) ?? 0;
+
+    return selling - cost;
+  }
+
+  double get _grossMarginPercentage {
+    final selling = double.tryParse(_selling.text.trim()) ?? 0;
+
+    if (selling <= 0) {
+      return 0;
+    }
+
+    return (_grossMargin / selling) * 100;
+  }
+
+  Widget _buildGrossMargin() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 8),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            size: 18,
+            color: Color(0xFF5B5CEB),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            'Gross margin: '
+            '₱${_grossMargin.toStringAsFixed(2)} '
+            '(${_grossMarginPercentage.toStringAsFixed(0)}%)',
+            style: const TextStyle(color: Color(0xFF5B5CEB)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _stockStatus {
+    final current = int.tryParse(_stock.text.trim()) ?? 0;
+
+    final minimum = int.tryParse(_minimumStock.text.trim()) ?? 0;
+
+    final maximum = int.tryParse(_maximumStock.text.trim()) ?? 0;
+
+    if (current == 0) {
+      return 'Out of Stock';
+    }
+
+    if (current > 0 && current <= minimum) {
+      return 'Low Stock';
+    }
+
+    if (current > maximum) {
+      return 'Over Maximum';
+    }
+
+    return 'Normal';
+  }
+
+  Color get _stockStatusColor {
+    switch (_stockStatus) {
+      case 'Out of Stock':
+        return Colors.red.shade700;
+      case 'Low Stock':
+        return Colors.orange.shade700;
+      case 'Over Maximum':
+        return const Color(0xFF5B5CEB);
+      default:
+        return Colors.green.shade700;
+    }
+  }
+
+  Widget _buildStockStatus() {
+    final color = _stockStatusColor;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Stock Status: ',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          Text(
+            _stockStatus,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPhotoSection() {
     final hasPhoto = _photoBytes != null;
 
@@ -509,15 +725,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           _buildPhotoSection(),
           const SizedBox(height: 14),
           TextFormField(
-            controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Product name',
-              border: OutlineInputBorder(),
-            ),
-            validator: _required,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
             controller: _sku,
             textCapitalization: TextCapitalization.characters,
             decoration: const InputDecoration(
@@ -528,11 +735,124 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ),
           const SizedBox(height: 12),
           TextFormField(
+            controller: _name,
+            decoration: const InputDecoration(
+              labelText: 'Product name',
+              border: OutlineInputBorder(),
+            ),
+            validator: _required,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('category-$_category'),
+                  initialValue: _category,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _categories
+                      .map(
+                        (value) => DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _category = value;
+                      _subcategory = null;
+                      _productClass = null;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('subcategory-$_category-$_subcategory'),
+                  initialValue: _subcategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Subcategory',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: (_subcategories[_category] ?? const <String>[])
+                      .map(
+                        (value) => DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _category == null
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _subcategory = value;
+                            _productClass = null;
+                          });
+                        },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('class-$_subcategory-$_productClass'),
+                  initialValue: _productClass,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Class',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: (_classes[_subcategory] ?? const <String>[])
+                      .map(
+                        (value) => DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _subcategory == null
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _productClass = value;
+                          });
+                        },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
             controller: _barcode,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Barcode (optional)',
-              border: OutlineInputBorder(),
+              hintText: 'Enter or scan barcode',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: 'Scan barcode',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Barcode scanner will be '
+                        'connected to the scanner service.',
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.qr_code_scanner,
+                  color: Color(0xFF5B5CEB),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -541,6 +861,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               Expanded(
                 child: TextFormField(
                   controller: _cost,
+                  onChanged: (_) {
+                    setState(() {});
+                  },
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -556,6 +879,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               Expanded(
                 child: TextFormField(
                   controller: _selling,
+                  onChanged: (_) {
+                    setState(() {});
+                  },
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -569,16 +895,56 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               ),
             ],
           ),
+          _buildGrossMargin(),
           const SizedBox(height: 12),
           TextFormField(
             controller: _stock,
+            onChanged: (_) {
+              setState(() {});
+            },
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Beginning stock',
+              labelText: 'Current stock',
               border: OutlineInputBorder(),
             ),
             validator: _integer,
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _minimumStock,
+                  onChanged: (_) {
+                    setState(() {});
+                  },
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Minimum stock',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _integer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _maximumStock,
+                  onChanged: (_) {
+                    setState(() {});
+                  },
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Maximum stock',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _integer,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildStockStatus(),
           const SizedBox(height: 8),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

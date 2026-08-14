@@ -8,6 +8,11 @@ class Product {
     required this.sellingPrice,
     required this.beginningStock,
     required this.currentStock,
+    this.minimumStock = 0,
+    this.maximumStock = 0,
+    this.category,
+    this.subcategory,
+    this.productClass,
     required this.active,
     this.localPhotoPath,
     required this.createdAt,
@@ -25,6 +30,11 @@ class Product {
   final double sellingPrice;
   final int beginningStock;
   final int currentStock;
+  final int minimumStock;
+  final int maximumStock;
+  final String? category;
+  final String? subcategory;
+  final String? productClass;
   final bool active;
 
   /// Device-only file path. Never upload this field to Firebase.
@@ -46,6 +56,14 @@ class Product {
     double? sellingPrice,
     int? beginningStock,
     int? currentStock,
+    int? minimumStock,
+    int? maximumStock,
+    String? category,
+    bool clearCategory = false,
+    String? subcategory,
+    bool clearSubcategory = false,
+    String? productClass,
+    bool clearProductClass = false,
     bool? active,
     String? localPhotoPath,
     bool clearLocalPhotoPath = false,
@@ -65,6 +83,13 @@ class Product {
       sellingPrice: sellingPrice ?? this.sellingPrice,
       beginningStock: beginningStock ?? this.beginningStock,
       currentStock: currentStock ?? this.currentStock,
+      minimumStock: minimumStock ?? this.minimumStock,
+      maximumStock: maximumStock ?? this.maximumStock,
+      category: clearCategory ? null : category ?? this.category,
+      subcategory: clearSubcategory ? null : subcategory ?? this.subcategory,
+      productClass: clearProductClass
+          ? null
+          : productClass ?? this.productClass,
       active: active ?? this.active,
       localPhotoPath: clearLocalPhotoPath
           ? null
@@ -88,6 +113,11 @@ class Product {
       sellingPrice: _toDouble(map['selling_price']),
       beginningStock: _toInt(map['beginning_stock']),
       currentStock: _toInt(map['current_stock']),
+      minimumStock: _toInt(map['minimum_stock']),
+      maximumStock: _toInt(map['maximum_stock']),
+      category: _nullableText(map['category']),
+      subcategory: _nullableText(map['subcategory']),
+      productClass: _nullableText(map['product_class']),
       active: _toInt(map['active']) == 1,
       localPhotoPath: _nullableText(map['local_photo_path']),
       createdAt: _toInt(map['created_at']),
@@ -109,6 +139,11 @@ class Product {
       'selling_price': sellingPrice,
       'beginning_stock': beginningStock,
       'current_stock': currentStock,
+      'minimum_stock': minimumStock,
+      'maximum_stock': maximumStock,
+      'category': _normalizedText(category),
+      'subcategory': _normalizedText(subcategory),
+      'product_class': _normalizedText(productClass),
       'active': active ? 1 : 0,
       'local_photo_path': localPhotoPath,
       'created_at': createdAt,
@@ -141,6 +176,11 @@ class Product {
       currentStock: map.containsKey('currentStock')
           ? _toInt(map['currentStock'])
           : beginningStock,
+      minimumStock: _toInt(map['minimumStock']),
+      maximumStock: _toInt(map['maximumStock']),
+      category: _nullableText(map['category']),
+      subcategory: _nullableText(map['subcategory']),
+      productClass: _nullableText(map['productClass']),
       active: map['active'] as bool? ?? true,
       localPhotoPath: localPhotoPath,
       createdAt: _toInt(map['createdAt']),
@@ -164,11 +204,26 @@ class Product {
       'sellingPrice': sellingPrice,
       'beginningStock': beginningStock,
       'currentStock': currentStock,
+      'minimumStock': minimumStock,
+      'maximumStock': maximumStock,
+      'category': _normalizedText(category),
+      'subcategory': _normalizedText(subcategory),
+      'productClass': _normalizedText(productClass),
       'active': active,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'isDeleted': isDeleted,
     };
+  }
+
+  static String? _normalizedText(String? value) {
+    final normalized = value?.trim() ?? '';
+
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized;
   }
 
   static String? _normalizedBarcode(String? value) {
