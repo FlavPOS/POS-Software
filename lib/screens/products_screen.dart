@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../models/product.dart';
 import '../repositories/product_repository.dart';
+import '../services/product_photo_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 
@@ -230,17 +231,7 @@ class _ProductCard extends StatelessWidget {
         child: ListTile(
           onTap: onTap,
           contentPadding: const EdgeInsets.all(14),
-          leading: CircleAvatar(
-            backgroundColor: product.active
-                ? const Color(0xFFEDE9FE)
-                : const Color(0xFFE5E7EB),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: product.active
-                  ? const Color(0xFF6D28D9)
-                  : const Color(0xFF6B7280),
-            ),
-          ),
+          leading: _ProductThumbnail(product: product),
           title: Row(
             children: [
               Expanded(
@@ -275,12 +266,91 @@ class _ProductCard extends StatelessWidget {
             child: Text(
               'SKU: ${product.sku}\n'
               'Selling: PHP ${product.sellingPrice.toStringAsFixed(2)}'
-              '   Stock: ${product.beginningStock}',
+              '   Stock: ${product.currentStock}',
             ),
           ),
           trailing: const Icon(Icons.chevron_right),
         ),
       ),
+    );
+  }
+}
+
+class _ProductThumbnail extends StatefulWidget {
+  const _ProductThumbnail({required this.product});
+
+  final Product product;
+
+  @override
+  State<_ProductThumbnail> createState() => _ProductThumbnailState();
+}
+
+class _ProductThumbnailState extends State<_ProductThumbnail> {
+  final ProductPhotoService _photoService = ProductPhotoService.instance;
+
+  late Future<Uint8List?> _photoFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _photoFuture = _loadPhoto();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.product.sku != widget.product.sku ||
+        oldWidget.product.localPhotoPath != widget.product.localPhotoPath ||
+        oldWidget.product.updatedAt != widget.product.updatedAt) {
+      _photoFuture = _loadPhoto();
+    }
+  }
+
+  Future<Uint8List?> _loadPhoto() async {
+    final product = widget.product;
+
+    final photoPath = kIsWeb
+        ? await _photoService.getPhotoPath(product.sku)
+        : product.localPhotoPath ??
+              await _photoService.getPhotoPath(product.sku);
+
+    return _photoService.readPhotoBytes(photoPath);
+  }
+
+  Widget _placeholder() {
+    return CircleAvatar(
+      backgroundColor: widget.product.active
+          ? const Color(0xFFEDE9FE)
+          : const Color(0xFFE5E7EB),
+      child: Icon(
+        Icons.inventory_2_outlined,
+        color: widget.product.active
+            ? const Color(0xFF6D28D9)
+            : const Color(0xFF6B7280),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _photoFuture,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+
+        if (bytes == null || bytes.isEmpty) {
+          return _placeholder();
+        }
+
+        return CircleAvatar(
+          backgroundColor: widget.product.active
+              ? const Color(0xFFEDE9FE)
+              : const Color(0xFFE5E7EB),
+          backgroundImage: MemoryImage(bytes),
+          onBackgroundImageError: (exception, stackTrace) {},
+        );
+      },
     );
   }
 }
