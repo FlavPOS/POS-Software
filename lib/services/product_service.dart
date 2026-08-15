@@ -42,6 +42,32 @@ class ProductService {
     });
   }
 
+  Future<List<Product>> getProducts() async {
+    final snapshot = await _products.get();
+    final raw = snapshot.value;
+
+    if (raw is! Map) {
+      return <Product>[];
+    }
+
+    final products = raw.entries
+        .where((entry) => entry.value is Map)
+        .map<Product>(
+          (entry) => Product.fromFirebase(
+            id: entry.key.toString(),
+            map: Map<Object?, Object?>.from(entry.value as Map),
+          ),
+        )
+        .where((product) => !product.isDeleted)
+        .toList();
+
+    products.sort((first, second) {
+      return first.name.toLowerCase().compareTo(second.name.toLowerCase());
+    });
+
+    return products;
+  }
+
   Future<void> save({
     String? id,
     required String name,

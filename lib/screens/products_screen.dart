@@ -5,11 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_item_master_export.dart';
 import '../models/product_delete_result.dart';
 import '../models/product_import_package.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_delete_service.dart';
 import '../services/product_photo_service.dart';
+import '../services/product_item_master_export_service.dart';
 import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
 import '../services/product_import_excel_service.dart';
@@ -41,6 +43,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   final ProductImportDownloadService _importDownloadService =
       ProductImportDownloadService.instance;
+
+  final ProductItemMasterExportService _itemMasterExportService =
+      ProductItemMasterExportService.instance;
+
+  bool _exportingItemMaster = false;
   final TextEditingController _searchController = TextEditingController();
 
   final ProductImportPackageService _importPackageService =
@@ -97,6 +104,109 @@ class _ProductsScreenState extends State<ProductsScreen> {
           sku.startsWith(_query) ||
           barcode.startsWith(_query);
     }).toList();
+  }
+
+  Future<void> _downloadItemMaster() async {
+    if (_exportingItemMaster) {
+      return;
+    }
+
+    setState(() {
+      _exportingItemMaster = true;
+    });
+
+    try {
+      final export = await _itemMasterExportService.createExport();
+
+      await _itemMasterExportService.download(export);
+
+      if (!mounted) {
+        return;
+      }
+
+      await _showItemMasterExportResult(export);
+    } on ProductItemMasterExportException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to download the Item '
+            'Master: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingItemMaster = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showItemMasterExportResult(
+    ProductItemMasterExport export,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Item Master Downloaded'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ExportResultLine(
+                label: 'Products Exported',
+                value: export.productsExported,
+              ),
+              _ExportResultLine(
+                label: 'Pictures Included',
+                value: export.picturesIncluded,
+              ),
+              _ExportResultLine(
+                label: 'Pictures Missing',
+                value: export.picturesMissing,
+              ),
+              _ExportResultLine(
+                label: 'Picture Failures',
+                value: export.pictureFailures,
+              ),
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const Expanded(child: Text('ZIP File Size')),
+                  Text(
+                    export.formattedFileSize,
+                    style: const TextStyle(
+                      color: Color(0xFF5B21B6),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _downloadImportTemplate() async {
@@ -809,13 +919,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     _downloadImportTemplate();
                     break;
 
+                  case 'item_master':
+                    _downloadItemMaster();
+                    break;
+
                   case 'select':
                     _startSelectionMode();
                     break;
                 }
               },
               itemBuilder: (context) {
-                return const <PopupMenuEntry<String>>[
+                return <PopupMenuEntry<String>>[
                   PopupMenuItem<String>(
                     value: 'add',
                     child: ListTile(
@@ -838,6 +952,26 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.download_outlined),
                       title: Text('Download Sample Template'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'item_master',
+                    enabled: !_exportingItemMaster,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: _exportingItemMaster
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.folder_zip_outlined),
+                      title: Text(
+                        _exportingItemMaster
+                            ? 'Preparing Item Master...'
+                            : 'Download Item Master '
+                                  'with Pictures',
+                      ),
                     ),
                   ),
                   PopupMenuItem<String>(
@@ -964,6 +1098,32 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ],
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExportResultLine extends StatelessWidget {
+  const _ExportResultLine({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              color: Color(0xFF5B21B6),
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
