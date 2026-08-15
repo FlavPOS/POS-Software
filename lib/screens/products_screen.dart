@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_update_template_package.dart';
 import '../models/product_item_master_export.dart';
 import '../models/product_delete_result.dart';
 import '../models/product_import_package.dart';
@@ -18,6 +19,8 @@ import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
 import '../services/product_import_excel_service.dart';
 import '../services/product_import_package_service.dart';
+import '../services/product_update_template_download_service.dart';
+import '../services/product_update_template_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 import 'product_import_review_screen.dart';
@@ -46,6 +49,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   final ProductImportDownloadService _importDownloadService =
       ProductImportDownloadService.instance;
+
+  final ProductUpdateTemplateDownloadService
+  _productUpdateTemplateDownloadService =
+      ProductUpdateTemplateDownloadService.instance;
+
+  bool _downloadingProductUpdateTemplate = false;
 
   final ProductItemMasterExportService _itemMasterExportService =
       ProductItemMasterExportService.instance;
@@ -288,6 +297,112 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadProductUpdateTemplate() async {
+    if (_downloadingProductUpdateTemplate) {
+      return;
+    }
+
+    setState(() {
+      _downloadingProductUpdateTemplate = true;
+    });
+
+    try {
+      final package = await _productUpdateTemplateDownloadService
+          .downloadTemplate();
+
+      if (!mounted) {
+        return;
+      }
+
+      await _showProductUpdateTemplateResult(package);
+    } on ProductUpdateTemplateException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to download the Product '
+            'Update Template: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingProductUpdateTemplate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showProductUpdateTemplateResult(
+    ProductUpdateTemplatePackage package,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Product Update Template Downloaded'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ExportResultLine(
+                label: 'Active Products',
+                value: package.activeProducts,
+              ),
+              _ExportResultLine(
+                label: 'With Pictures',
+                value: package.productsWithPictures,
+              ),
+              _ExportResultLine(
+                label: 'Missing Pictures',
+                value: package.productsMissingPictures,
+              ),
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const Expanded(child: Text('ZIP File Size')),
+                  Text(
+                    package.formattedFileSize,
+                    style: const TextStyle(
+                      color: Color(0xFF5B21B6),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Enter update values only for '
+                'products that need changes. '
+                'Blank editable cells will keep '
+                'their existing values.',
+                style: TextStyle(color: Color(0xFF4B5563), fontSize: 12),
               ),
             ],
           ),
@@ -1014,6 +1129,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     _selectPictureUpdateZip();
                     break;
 
+                  case 'update_template':
+                    _downloadProductUpdateTemplate();
+                    break;
+
                   case 'template':
                     _downloadImportTemplate();
                     break;
@@ -1061,6 +1180,26 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         _processingPictureUpdate
                             ? 'Preparing Picture Update...'
                             : 'Update Product Pictures',
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'update_template',
+                    enabled: !_downloadingProductUpdateTemplate,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: _downloadingProductUpdateTemplate
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.system_update_alt_outlined),
+                      title: Text(
+                        _downloadingProductUpdateTemplate
+                            ? 'Preparing Update Template...'
+                            : 'Download Product Update '
+                                  'Template',
                       ),
                     ),
                   ),
