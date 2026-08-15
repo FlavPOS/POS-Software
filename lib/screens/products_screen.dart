@@ -11,6 +11,8 @@ import '../models/product_import_package.dart';
 import '../repositories/product_repository.dart';
 import '../services/product_delete_service.dart';
 import '../services/product_photo_service.dart';
+import '../services/product_picture_update_parse_service.dart';
+import '../services/product_picture_update_picker_service.dart';
 import '../services/product_item_master_export_service.dart';
 import '../services/product_import_download_service.dart';
 import '../services/product_import_picker_service.dart';
@@ -19,6 +21,7 @@ import '../services/product_import_package_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 import 'product_import_review_screen.dart';
+import 'product_picture_update_review_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -58,6 +61,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   final ProductImportPickerService _importPickerService =
       ProductImportPickerService.instance;
+
+  final ProductPictureUpdatePickerService _pictureUpdatePickerService =
+      ProductPictureUpdatePickerService.instance;
+
+  final ProductPictureUpdateParseService _pictureUpdateParseService =
+      ProductPictureUpdateParseService.instance;
+
+  bool _processingPictureUpdate = false;
+
+  int _pictureRefreshVersion = 0;
 
   Timer? _debounce;
   String _query = '';
@@ -104,6 +117,88 @@ class _ProductsScreenState extends State<ProductsScreen> {
           sku.startsWith(_query) ||
           barcode.startsWith(_query);
     }).toList();
+  }
+
+  Future<void> _selectPictureUpdateZip() async {
+    if (_processingPictureUpdate) {
+      return;
+    }
+
+    try {
+      final selectedFile = await _pictureUpdatePickerService.pickZip();
+
+      if (selectedFile == null || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _processingPictureUpdate = true;
+      });
+
+      final updatePackage = await _pictureUpdateParseService.parse(
+        selectedFile,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final picturesUpdated = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (context) {
+            return ProductPictureUpdateReviewScreen(package: updatePackage);
+          },
+        ),
+      );
+
+      if (picturesUpdated == true && mounted) {
+        setState(() {
+          _pictureRefreshVersion++;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Product pictures updated '
+              'successfully.',
+            ),
+          ),
+        );
+      }
+    } on ProductPictureUpdatePickerException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } on ProductPictureUpdateParseException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to prepare the picture '
+            'update: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingPictureUpdate = false;
+        });
+      }
+    }
   }
 
   Future<void> _downloadItemMaster() async {
@@ -915,6 +1010,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     _selectImportFile();
                     break;
 
+                  case 'update_pictures':
+                    _selectPictureUpdateZip();
+                    break;
+
                   case 'template':
                     _downloadImportTemplate();
                     break;
@@ -944,6 +1043,25 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.upload_file_outlined),
                       title: Text('Import Products'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'update_pictures',
+                    enabled: !_processingPictureUpdate,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: _processingPictureUpdate
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.add_photo_alternate_outlined),
+                      title: Text(
+                        _processingPictureUpdate
+                            ? 'Preparing Picture Update...'
+                            : 'Update Product Pictures',
+                      ),
                     ),
                   ),
                   PopupMenuItem<String>(
@@ -1075,6 +1193,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
                           return _ProductCard(
                             product: product,
+                            pictureRefreshVersion: _pictureRefreshVersion,
                             deleting: _deletingProductIds.contains(product.id),
                             selectionMode: _selectionMode,
                             selected: _selectedProductIds.contains(product.id),
@@ -1451,6 +1570,7 @@ class _ImportTotalRow extends StatelessWidget {
 class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.product,
+    required this.pictureRefreshVersion,
     required this.deleting,
     required this.selectionMode,
     required this.selected,
@@ -1460,6 +1580,7 @@ class _ProductCard extends StatelessWidget {
   });
 
   final Product product;
+  final int pictureRefreshVersion;
   final bool deleting;
   final bool selectionMode;
   final bool selected;
@@ -1493,7 +1614,13 @@ class _ProductCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ProductThumbnail(product: product),
+                _ProductThumbnail(
+                  key: ValueKey<String>(
+                    '${product.id}:'
+                    '$pictureRefreshVersion',
+                  ),
+                  product: product,
+                ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
@@ -1647,7 +1774,7 @@ class _ProductCard extends StatelessWidget {
 }
 
 class _ProductThumbnail extends StatefulWidget {
-  const _ProductThumbnail({required this.product});
+  const _ProductThumbnail({super.key, required this.product});
 
   final Product product;
 
