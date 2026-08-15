@@ -1309,117 +1309,179 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tablet = MediaQuery.sizeOf(context).width >= 600;
+
+    final cardHeight = tablet ? 148.0 : 132.0;
+
     return Opacity(
       opacity: product.active ? 1 : 0.58,
       child: Card(
+        margin: EdgeInsets.zero,
         color: selected ? const Color(0xFFF5F3FF) : Colors.white,
+        elevation: 0.6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           side: selected
               ? const BorderSide(color: Color(0xFF7C3AED), width: 1.5)
-              : BorderSide.none,
+              : const BorderSide(color: Color(0xFFE5E7EB), width: 0.8),
         ),
         clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          onTap: onTap,
-          contentPadding: const EdgeInsets.fromLTRB(14, 13, 10, 13),
-          horizontalTitleGap: 14,
-          minLeadingWidth: 78,
-          leading: _ProductThumbnail(product: product),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  product.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: product.active
-                      ? const Color(0xFFD1FAE5)
-                      : const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  product.active ? 'ACTIVE' : 'INACTIVE',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
+        child: SizedBox(
+          height: cardHeight,
+          child: InkWell(
+            onTap: onTap,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProductThumbnail(product: product),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                product.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  height: 1.22,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildStatusBadge(),
+                          ],
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          'SKU: ${product.sku}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF4B5563),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 18,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              'Selling: PHP '
+                              '${product.sellingPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Color(0xFF4B5563),
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              'Stock: '
+                              '${product.currentStock}',
+                              style: const TextStyle(
+                                color: Color(0xFF4B5563),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'SKU: ${product.sku}\n'
-              'Selling: PHP ${product.sellingPrice.toStringAsFixed(2)}'
-              '   Stock: ${product.currentStock}',
+                Align(alignment: Alignment.center, child: _buildTrailing()),
+                const SizedBox(width: 4),
+              ],
             ),
           ),
-          trailing: selectionMode
-              ? Checkbox(
-                  value: selected,
-                  onChanged: deleting
-                      ? null
-                      : (_) {
-                          onSelectionChanged();
-                        },
-                )
-              : deleting
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : PopupMenuButton<String>(
-                  tooltip: 'Product options',
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'edit':
-                        onTap();
-                        break;
-
-                      case 'delete':
-                        onDelete();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) {
-                    return const <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'edit',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.edit_outlined),
-                          title: Text('Edit Product'),
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'delete',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.delete_outline,
-                            color: Color(0xFFB91C1C),
-                          ),
-                          title: Text(
-                            'Delete Product',
-                            style: TextStyle(color: Color(0xFFB91C1C)),
-                          ),
-                        ),
-                      ),
-                    ];
-                  },
-                ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: product.active
+            ? const Color(0xFFD1FAE5)
+            : const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        product.active ? 'ACTIVE' : 'INACTIVE',
+        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+
+  Widget _buildTrailing() {
+    if (selectionMode) {
+      return Checkbox(
+        value: selected,
+        onChanged: deleting
+            ? null
+            : (_) {
+                onSelectionChanged();
+              },
+      );
+    }
+
+    if (deleting) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: 'Product options',
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            onTap();
+            break;
+
+          case 'delete':
+            onDelete();
+            break;
+        }
+      },
+      itemBuilder: (context) {
+        return const <PopupMenuEntry<String>>[
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.edit_outlined),
+              title: Text('Edit Product'),
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.delete_outline, color: Color(0xFFB91C1C)),
+              title: Text(
+                'Delete Product',
+                style: TextStyle(color: Color(0xFFB91C1C)),
+              ),
+            ),
+          ),
+        ];
+      },
     );
   }
 }
@@ -1468,72 +1530,48 @@ class _ProductThumbnailState extends State<_ProductThumbnail> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final tablet = MediaQuery.sizeOf(context).width >= 600;
 
-    final tablet = screenWidth >= 600;
-
-    final imageWidth = tablet ? 76.0 : 64.0;
-
-    final imageHeight = tablet ? 84.0 : 72.0;
+    final imageWidth = tablet ? 140.0 : 124.0;
 
     return SizedBox(
       width: imageWidth,
-      height: imageHeight,
+      height: double.infinity,
       child: FutureBuilder<Uint8List?>(
         future: _photoFuture,
         builder: (context, snapshot) {
           final bytes = snapshot.data;
 
           if (bytes == null || bytes.isEmpty) {
-            return _placeholder(width: imageWidth, height: imageHeight);
+            return _placeholder();
           }
 
-          return Container(
+          return Image.memory(
+            bytes,
             width: imageWidth,
-            height: imageHeight,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.memory(
-                bytes,
-                width: imageWidth,
-                height: imageHeight,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (context, error, stackTrace) {
-                  return _placeholder(width: imageWidth, height: imageHeight);
-                },
-              ),
-            ),
+            height: double.infinity,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stackTrace) {
+              return _placeholder();
+            },
           );
         },
       ),
     );
   }
 
-  Widget _placeholder({required double width, required double height}) {
+  Widget _placeholder() {
     return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: widget.product.active
-            ? const Color(0xFFEDE9FE)
-            : const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: widget.product.active
-              ? const Color(0xFFC4B5FD)
-              : const Color(0xFFD1D5DB),
-        ),
-      ),
+      width: double.infinity,
+      height: double.infinity,
+      color: widget.product.active
+          ? const Color(0xFFEDE9FE)
+          : const Color(0xFFE5E7EB),
       child: Icon(
         Icons.inventory_2_outlined,
-        size: 30,
+        size: 38,
         color: widget.product.active
             ? const Color(0xFF6D28D9)
             : const Color(0xFF6B7280),
