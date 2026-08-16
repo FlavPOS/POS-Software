@@ -21,10 +21,14 @@ import '../services/product_import_excel_service.dart';
 import '../services/product_import_package_service.dart';
 import '../services/product_update_template_download_service.dart';
 import '../services/product_update_template_service.dart';
+import '../services/product_update_picker_service.dart';
+import '../services/product_update_package_service.dart';
+import '../services/product_update_excel_service.dart';
 import '../services/product_service.dart';
 import 'product_form_screen.dart';
 import 'product_import_review_screen.dart';
 import 'product_picture_update_review_screen.dart';
+import 'product_update_review_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -81,6 +85,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   int _pictureRefreshVersion = 0;
 
+  final ProductUpdatePickerService _productUpdatePickerService =
+      ProductUpdatePickerService.instance;
+
+  final ProductUpdatePackageService _productUpdatePackageService =
+      ProductUpdatePackageService.instance;
+
+  final ProductUpdateExcelService _productUpdateExcelService =
+      ProductUpdateExcelService.instance;
+
+  bool _processingProductUpdate = false;
+
   Timer? _debounce;
   String _query = '';
 
@@ -126,6 +141,95 @@ class _ProductsScreenState extends State<ProductsScreen> {
           sku.startsWith(_query) ||
           barcode.startsWith(_query);
     }).toList();
+  }
+
+  Future<void> _selectProductUpdateFile() async {
+    if (_processingProductUpdate) {
+      return;
+    }
+
+    try {
+      final selectedFile = await _productUpdatePickerService.pickFile();
+
+      if (selectedFile == null || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _processingProductUpdate = true;
+      });
+
+      final updatePackage = _productUpdatePackageService.validate(selectedFile);
+
+      final parseResult = await _productUpdateExcelService.parse(updatePackage);
+
+      if (!mounted) {
+        return;
+      }
+
+      final productsUpdated = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (context) {
+            return ProductUpdateReviewScreen(result: parseResult);
+          },
+        ),
+      );
+
+      if (productsUpdated == true && mounted) {
+        setState(() {
+          _pictureRefreshVersion++;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Existing products updated '
+              'successfully.',
+            ),
+          ),
+        );
+      }
+    } on ProductUpdatePickerException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } on ProductUpdatePackageException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } on ProductUpdateExcelException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to prepare the Product '
+            'Update: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingProductUpdate = false;
+        });
+      }
+    }
   }
 
   Future<void> _selectPictureUpdateZip() async {
@@ -1125,6 +1229,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     _selectImportFile();
                     break;
 
+                  case 'update_existing':
+                    _selectProductUpdateFile();
+                    break;
+
                   case 'update_pictures':
                     _selectPictureUpdateZip();
                     break;
@@ -1162,6 +1270,25 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.upload_file_outlined),
                       title: Text('Import Products'),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'update_existing',
+                    enabled: !_processingProductUpdate,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: _processingProductUpdate
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.edit_note_outlined),
+                      title: Text(
+                        _processingProductUpdate
+                            ? 'Preparing Product Update...'
+                            : 'Update Existing Products',
+                      ),
                     ),
                   ),
                   PopupMenuItem<String>(
