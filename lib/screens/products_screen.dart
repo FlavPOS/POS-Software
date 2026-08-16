@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../utils/product_list_presentation.dart';
 import '../models/product_update_template_package.dart';
 import '../models/product_item_master_export.dart';
 import '../models/product_delete_result.dart';
@@ -99,6 +100,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Timer? _debounce;
   String _query = '';
 
+  ProductQuickFilter _quickFilter = ProductQuickFilter.all;
   @override
   void dispose() {
     _debounce?.cancel();
@@ -129,18 +131,49 @@ class _ProductsScreenState extends State<ProductsScreen> {
     });
   }
 
-  List<Product> _filteredProducts(List<Product> products) {
-    if (_query.isEmpty) return products;
+  List<Product> _searchMatchedProducts(List<Product> products) {
+    if (_query.isEmpty) {
+      return List<Product>.from(products);
+    }
 
     return products.where((product) {
       final name = product.name.toLowerCase();
+
       final sku = product.sku.toLowerCase();
+
       final barcode = (product.barcode ?? '').toLowerCase();
 
       return name.contains(_query) ||
           sku.startsWith(_query) ||
           barcode.startsWith(_query);
     }).toList();
+  }
+
+  List<Product> _filteredProducts(List<Product> products) {
+    final searchMatched = _searchMatchedProducts(products);
+
+    return searchMatched
+        .where((product) => product.matchesQuickFilter(_quickFilter))
+        .toList();
+  }
+
+  int _quickFilterCount({
+    required List<Product> products,
+    required ProductQuickFilter filter,
+  }) {
+    return products
+        .where((product) => product.matchesQuickFilter(filter))
+        .length;
+  }
+
+  void _selectQuickFilter(ProductQuickFilter filter) {
+    if (_quickFilter == filter) {
+      return;
+    }
+
+    setState(() {
+      _quickFilter = filter;
+    });
   }
 
   Future<void> _selectProductUpdateFile() async {
@@ -1203,6 +1236,38 @@ class _ProductsScreenState extends State<ProductsScreen> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Tooltip(
+              message: 'Add Product',
+              child: FilledButton.icon(
+                onPressed: _selectionMode
+                    ? null
+                    : () {
+                        _openForm();
+                      },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFCBD5E1),
+                  disabledForegroundColor: const Color(0xFF64748B),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text(
+                  'Add Product',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
           StreamBuilder<DatabaseEvent>(
             stream: _service.connectedRef.onValue,
             builder: (context, snapshot) {
@@ -1376,26 +1441,90 @@ class _ProductsScreenState extends State<ProductsScreen> {
             ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: 'Search name, SKU, or barcode',
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: _clearSearch,
-                        icon: const Icon(Icons.clear),
+          Container(
+            width: double.infinity,
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: Color(0xFF64748B),
                       ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                      hintText: 'Search name, SKU, or barcode',
+                      hintStyle: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                      ),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: _clearSearch,
+                              icon: const Icon(Icons.close, size: 20),
+                            ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF16A34A),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Tooltip(
+                  message: 'Product actions',
+                  child: Material(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Use the Product Actions '
+                              'button below for imports, '
+                              'updates, exports, and '
+                              'selection tools.',
+                            ),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: const SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: Icon(
+                          Icons.tune_rounded,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -1420,17 +1549,37 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final products = _filteredProducts(snapshot.data!);
+                final allProducts = snapshot.data!;
+
+                final products = _filteredProducts(allProducts);
 
                 if (products.isEmpty) {
                   return _EmptyProducts(
-                    searching: _query.isNotEmpty,
+                    searching:
+                        _query.isNotEmpty ||
+                        _quickFilter != ProductQuickFilter.all,
                     onAdd: () => _openForm(),
                   );
                 }
 
                 return Column(
                   children: [
+                    _ProductQuickFilters(
+                      selected: _quickFilter,
+                      allCount: _quickFilterCount(
+                        products: allProducts,
+                        filter: ProductQuickFilter.all,
+                      ),
+                      activeCount: _quickFilterCount(
+                        products: allProducts,
+                        filter: ProductQuickFilter.active,
+                      ),
+                      lowStockCount: _quickFilterCount(
+                        products: allProducts,
+                        filter: ProductQuickFilter.lowStock,
+                      ),
+                      onSelected: _selectQuickFilter,
+                    ),
                     if (_selectionMode)
                       _SelectionToolbar(
                         selectedCount: _selectedProductIds.length,
@@ -1486,6 +1635,92 @@ class _ProductsScreenState extends State<ProductsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProductQuickFilters extends StatelessWidget {
+  const _ProductQuickFilters({
+    required this.selected,
+    required this.allCount,
+    required this.activeCount,
+    required this.lowStockCount,
+    required this.onSelected,
+  });
+
+  final ProductQuickFilter selected;
+  final int allCount;
+  final int activeCount;
+  final int lowStockCount;
+
+  final ValueChanged<ProductQuickFilter> onSelected;
+
+  int _countFor(ProductQuickFilter filter) {
+    switch (filter) {
+      case ProductQuickFilter.all:
+        return allCount;
+
+      case ProductQuickFilter.active:
+        return activeCount;
+
+      case ProductQuickFilter.lowStock:
+        return lowStockCount;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: ProductQuickFilter.values.map((filter) {
+            final isSelected = selected == filter;
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                selected: isSelected,
+                showCheckmark: false,
+                avatar: Icon(
+                  filter.icon,
+                  size: 17,
+                  color: isSelected
+                      ? const Color(0xFF166534)
+                      : const Color(0xFF64748B),
+                ),
+                label: Text(
+                  '${filter.label} '
+                  '(${_countFor(filter)})',
+                ),
+                labelStyle: TextStyle(
+                  color: isSelected
+                      ? const Color(0xFF166534)
+                      : const Color(0xFF475569),
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                ),
+                backgroundColor: Colors.white,
+                selectedColor: const Color(0xFFDCFCE7),
+                side: BorderSide(
+                  color: isSelected
+                      ? const Color(0xFF86EFAC)
+                      : const Color(0xFFE2E8F0),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                onSelected: (_) {
+                  onSelected(filter);
+                },
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -1856,130 +2091,148 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tablet = MediaQuery.sizeOf(context).width >= 600;
+    final width = MediaQuery.sizeOf(context).width;
+    final tablet = width >= 600;
 
-    final cardHeight = tablet ? 148.0 : 132.0;
+    final cardHeight = tablet ? 156.0 : 142.0;
 
-    return Opacity(
-      opacity: product.active ? 1 : 0.58,
-      child: Card(
-        margin: EdgeInsets.zero,
-        color: selected ? const Color(0xFFF5F3FF) : Colors.white,
-        elevation: 0.6,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: selected
-              ? const BorderSide(color: Color(0xFF7C3AED), width: 1.5)
-              : const BorderSide(color: Color(0xFFE5E7EB), width: 0.8),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: cardHeight,
-          child: InkWell(
-            onTap: onTap,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ProductThumbnail(
-                  key: ValueKey<String>(
-                    '${product.id}:'
-                    '$pictureRefreshVersion',
-                  ),
-                  product: product,
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: selected ? const Color(0xFFF5F3FF) : Colors.white,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: selected
+            ? const BorderSide(color: Color(0xFF7C3AED), width: 1.6)
+            : const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      child: SizedBox(
+        height: cardHeight,
+        child: InkWell(
+          onTap: deleting ? null : onTap,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ProductThumbnail(
+                key: ValueKey<String>(
+                  '${product.id}:'
+                  '$pictureRefreshVersion',
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                product.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.22,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                product: product,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    tablet ? 16 : 13,
+                    tablet ? 14 : 12,
+                    2,
+                    tablet ? 14 : 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              product.compactSkuLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildStatusBadge(),
-                          ],
+                          ),
+                          const SizedBox(width: 6),
+                          _ProductStockBadge(product: product),
+                          _buildTrailingAction(),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: product.active
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFF64748B),
+                          fontSize: tablet ? 16 : 15,
+                          height: 1.12,
+                          fontWeight: FontWeight.w800,
                         ),
-                        const SizedBox(height: 9),
+                      ),
+                      const SizedBox(height: 5),
+                      if (product.classificationPath.isNotEmpty)
                         Text(
-                          'SKU: ${product.sku}',
+                          product.classificationPath,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFF4B5563),
-                            fontSize: 13,
+                            color: Color(0xFF64748B),
+                            fontSize: 11,
                           ),
                         ),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 18,
-                          runSpacing: 4,
-                          children: [
-                            Text(
-                              'Selling: PHP '
-                              '${product.sellingPrice.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Color(0xFF4B5563),
-                                fontSize: 13,
+                      const Spacer(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              product.formattedSellingPrice,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: product.active
+                                    ? const Color(0xFF111827)
+                                    : const Color(0xFF6B7280),
+                                fontSize: tablet ? 18 : 16,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                            Text(
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
                               'Stock: '
                               '${product.currentStock}',
                               style: const TextStyle(
-                                color: Color(0xFF4B5563),
-                                fontSize: 13,
+                                color: Color(0xFF475569),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                Align(alignment: Alignment.center, child: _buildTrailing()),
-                const SizedBox(width: 4),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatusBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: product.active
-            ? const Color(0xFFD1FAE5)
-            : const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        product.active ? 'ACTIVE' : 'INACTIVE',
-        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-
-  Widget _buildTrailing() {
+  Widget _buildTrailingAction() {
     if (selectionMode) {
       return Checkbox(
         value: selected,
+        visualDensity: VisualDensity.compact,
         onChanged: deleting
             ? null
             : (_) {
@@ -1990,10 +2243,10 @@ class _ProductCard extends StatelessWidget {
 
     if (deleting) {
       return const Padding(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.all(10),
         child: SizedBox(
-          width: 22,
-          height: 22,
+          width: 20,
+          height: 20,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       );
@@ -2001,6 +2254,8 @@ class _ProductCard extends StatelessWidget {
 
     return PopupMenuButton<String>(
       tooltip: 'Product options',
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.more_vert, color: Color(0xFF64748B), size: 21),
       onSelected: (value) {
         switch (value) {
           case 'edit':
@@ -2035,6 +2290,32 @@ class _ProductCard extends StatelessWidget {
           ),
         ];
       },
+    );
+  }
+}
+
+class _ProductStockBadge extends StatelessWidget {
+  const _ProductStockBadge({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: product.stockStatusBackgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        product.stockStatusLabel,
+        style: TextStyle(
+          color: product.stockStatusTextColor,
+          fontSize: 9,
+          height: 1,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
