@@ -157,11 +157,7 @@ class ProductUpdateTemplateService {
 
     final updateSheet = excel[updatesSheet];
 
-    _buildUpdateSheet(
-      sheet: updateSheet,
-      products: products,
-      pictureStatuses: pictureStatuses,
-    );
+    _buildUpdateSheet(sheet: updateSheet);
 
     _buildInstructionsSheet(excel[instructionsSheet]);
 
@@ -178,57 +174,44 @@ class ProductUpdateTemplateService {
     return Uint8List.fromList(encoded);
   }
 
-  void _buildUpdateSheet({
-    required Sheet sheet,
-    required List<Product> products,
-    required Map<String, String> pictureStatuses,
-  }) {
+  void _buildUpdateSheet({required Sheet sheet}) {
     sheet.appendRow(headers.map<CellValue>(TextCellValue.new).toList());
 
-    for (final product in products) {
-      sheet.appendRow(<CellValue>[
-        TextCellValue(product.sku),
-        TextCellValue(product.name),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(''),
-        TextCellValue(
-          pictureStatuses[product.id] ?? 'Picture Status Unavailable',
-        ),
-      ]);
-    }
+    // One blank input row only.
+    // Enter only an existing SKU that needs
+    // product information or picture updates.
+    sheet.appendRow(<CellValue>[
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue('Enter only products that need updates.'),
+    ]);
 
     _styleHeader(sheet: sheet, columnCount: headers.length);
 
-    _styleUpdateRows(sheet: sheet, products: products);
+    _styleUpdateRows(sheet: sheet, rowCount: 1);
 
-    final widths = <double>[18, 32, 20, 20, 20, 20, 15, 15, 16, 16, 12, 28, 34];
+    final widths = <double>[18, 32, 20, 20, 20, 20, 15, 15, 16, 16, 12, 28, 38];
 
     for (var column = 0; column < widths.length; column++) {
       sheet.setColumnWidth(column, widths[column]);
     }
   }
 
-  void _styleUpdateRows({
-    required Sheet sheet,
-    required List<Product> products,
-  }) {
+  void _styleUpdateRows({required Sheet sheet, required int rowCount}) {
     final skuStyle = CellStyle(
       bold: true,
       backgroundColorHex: ExcelColor.fromHexString('#FEE2E2'),
       fontColorHex: ExcelColor.fromHexString('#991B1B'),
-    );
-
-    final referenceStyle = CellStyle(
-      backgroundColorHex: ExcelColor.fromHexString('#E0F2FE'),
-      fontColorHex: ExcelColor.fromHexString('#075985'),
     );
 
     final editableStyle = CellStyle(
@@ -236,18 +219,13 @@ class ProductUpdateTemplateService {
       fontColorHex: ExcelColor.fromHexString('#713F12'),
     );
 
-    for (var row = 1; row <= products.length; row++) {
+    for (var row = 1; row <= rowCount; row++) {
       sheet
               .cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
               .cellStyle =
           skuStyle;
 
-      sheet
-              .cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
-              .cellStyle =
-          referenceStyle;
-
-      for (var column = 2; column < headers.length; column++) {
+      for (var column = 1; column < headers.length; column++) {
         sheet
                 .cell(
                   CellIndex.indexByColumnRow(
@@ -284,7 +262,7 @@ class ProductUpdateTemplateService {
     final rows = <List<String>>[
       <String>['FLAV POS PRODUCT UPDATE TEMPLATE'],
       <String>[''],
-      <String>['PURPOSE', 'Update selected existing products only.'],
+      <String>['PURPOSE', 'Enter only products that need updates.'],
       <String>['MATCHING RULE', 'SKU is required and cannot be changed.'],
       <String>[
         'BLANK CELL RULE',
@@ -388,8 +366,10 @@ PURPOSE
 -------
 Use this package to update selected existing products.
 
-Only products listed in Product_Update.xlsx will be reviewed.
-Products not included in the workbook remain unchanged.
+Only products entered in Product_Update.xlsx will be reviewed.
+The template contains one blank input row only.
+Add additional rows only for products that need updates.
+Products not entered in the workbook remain unchanged.
 
 PACKAGE CONTENTS
 ----------------
