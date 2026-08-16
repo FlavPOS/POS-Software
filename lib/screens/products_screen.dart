@@ -2117,10 +2117,14 @@ class _ProductCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           _ProductStockBadge(product: product),
-                          _buildTrailingAction(),
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Center(child: _buildTrailingAction()),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 1),
                       Text(
                         product.name,
                         maxLines: 2,
