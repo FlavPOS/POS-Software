@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/product_operation_progress.dart';
+import '../widgets/product_operation_progress_dialog.dart';
 import '../models/product_import_parse_result.dart';
 import '../models/product_import_row.dart';
 import '../services/product_import_save_service.dart';
@@ -117,7 +119,49 @@ class _ProductImportReviewScreenState extends State<ProductImportReviewScreen> {
     });
 
     try {
-      final result = await _importSaveService.importValidRows(widget.result);
+      final progressController = ProductOperationProgressController(
+        title: 'Importing Products',
+        unitLabel: 'products',
+        detail: 'Preparing product import...',
+      );
+
+      final progressDialog = showProductOperationProgressDialog(
+        context: context,
+        controller: progressController,
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final result = await _importSaveService.importValidRows(
+        widget.result,
+        onProgress: ({required completed, required total, currentSku, detail}) {
+          if (total > 0 && progressController.value.total == 0) {
+            progressController.start(
+              total: total,
+              currentItem: currentSku,
+              detail: detail,
+            );
+            return;
+          }
+
+          progressController.update(
+            completed: completed,
+            currentItem: currentSku,
+            detail: detail,
+          );
+        },
+      );
+
+      progressController.complete(detail: 'Product import completed.');
+
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      await progressDialog;
+      progressController.dispose();
 
       if (!mounted) {
         return;

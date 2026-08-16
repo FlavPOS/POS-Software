@@ -12,6 +12,13 @@ import 'product_photo_service.dart';
 import 'product_service.dart';
 import 'product_sync_service.dart';
 
+typedef ProductImportProgressCallback = void Function({
+  required int completed,
+  required int total,
+  String? currentSku,
+  String? detail,
+});
+
 class ProductImportSaveService {
   ProductImportSaveService._();
 
@@ -28,8 +35,9 @@ class ProductImportSaveService {
   final Uuid _uuid = const Uuid();
 
   Future<ProductImportSaveResult> importValidRows(
-    ProductImportParseResult result,
-  ) async {
+    ProductImportParseResult result, {
+    ProductImportProgressCallback? onProgress,
+  }) async {
     final rowResults = <ProductImportRowSaveResult>[];
 
     final summary = ProductImportSummary(
@@ -39,7 +47,24 @@ class ProductImportSaveService {
       errorRows: result.errorRows,
     );
 
+    final total = result.rows.length;
+    var completed = 0;
+
+    onProgress?.call(
+      completed: 0,
+      total: total,
+      detail: 'Starting product import...',
+    );
+
     for (final row in result.rows) {
+      onProgress?.call(
+        completed: completed,
+        total: total,
+        currentSku: row.normalizedSku.isEmpty
+            ? 'Excel row'
+            : 'SKU ${row.normalizedSku}',
+        detail: 'Validating product...',
+      );
       if (!row.isValid) {
         summary.skipped++;
 
@@ -53,6 +78,17 @@ class ProductImportSaveService {
             pictureMissing:
                 row.normalizedPictureFileName != null && !row.hasPicture,
           ),
+        );
+
+        completed += 1;
+
+        onProgress?.call(
+          completed: completed,
+          total: total,
+          currentSku: row.normalizedSku.isEmpty
+              ? 'Excel row'
+              : 'SKU ${row.normalizedSku}',
+          detail: 'Product row skipped.',
         );
 
         continue;
@@ -87,6 +123,16 @@ class ProductImportSaveService {
       if (rowResult.pictureFailed) {
         summary.picturesFailed++;
       }
+      completed += 1;
+
+      onProgress?.call(
+        completed: completed,
+        total: total,
+        currentSku: row.normalizedSku.isEmpty
+            ? 'Excel row'
+            : 'SKU ${row.normalizedSku}',
+        detail: 'Product row processed.',
+      );
     }
 
     return ProductImportSaveResult(
