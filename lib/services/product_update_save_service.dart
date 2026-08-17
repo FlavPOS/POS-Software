@@ -5,6 +5,7 @@ import '../models/product.dart';
 import '../models/product_update.dart';
 import '../repositories/product_repository.dart';
 import 'product_photo_service.dart';
+import 'product_picture_optimization_service.dart';
 import 'product_service.dart';
 
 class ProductUpdateSaveService {
@@ -17,6 +18,9 @@ class ProductUpdateSaveService {
   final ProductRepository _repository = ProductRepository.instance;
 
   final ProductPhotoService _photoService = ProductPhotoService.instance;
+
+  final ProductPictureOptimizationService _pictureOptimizer =
+      ProductPictureOptimizationService.instance;
 
   Future<ProductUpdateSaveResult> saveReadyRows(
     ProductUpdateParseResult result,
@@ -147,7 +151,16 @@ class ProductUpdateSaveService {
       return;
     }
 
-    final selectedPhoto = XFile.fromData(pictureBytes, name: pictureFileName);
+    final optimized = _pictureOptimizer.optimizeMaster(
+      sourceBytes: pictureBytes,
+      sku: product.sku,
+    );
+
+    final selectedPhoto = XFile.fromData(
+      optimized.bytes,
+      name: optimized.fileName,
+      mimeType: optimized.mimeType,
+    );
 
     final savedPath = await _photoService.savePhoto(
       sku: product.sku,
