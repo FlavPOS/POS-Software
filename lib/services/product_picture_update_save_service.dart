@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/product_picture_update.dart';
 import '../repositories/product_repository.dart';
 import 'product_photo_service.dart';
+import 'product_picture_optimization_service.dart';
 
 class ProductPictureUpdateSaveService {
   ProductPictureUpdateSaveService._();
@@ -14,6 +15,9 @@ class ProductPictureUpdateSaveService {
   final ProductPhotoService _photoService = ProductPhotoService.instance;
 
   final ProductRepository _repository = ProductRepository.instance;
+
+  final ProductPictureOptimizationService _pictureOptimizer =
+      ProductPictureOptimizationService.instance;
 
   Future<ProductPictureUpdateResult> updateMatchedPictures(
     ProductPictureUpdatePackage package,
@@ -48,7 +52,16 @@ class ProductPictureUpdateSaveService {
     }
 
     try {
-      final selectedPhoto = XFile.fromData(item.bytes, name: item.fileName);
+      final optimized = _pictureOptimizer.optimizeMaster(
+        sourceBytes: item.bytes,
+        sku: product.sku,
+      );
+
+      final selectedPhoto = XFile.fromData(
+        optimized.bytes,
+        name: optimized.fileName,
+        mimeType: optimized.mimeType,
+      );
 
       final savedPath = await _photoService.savePhoto(
         sku: product.sku,
