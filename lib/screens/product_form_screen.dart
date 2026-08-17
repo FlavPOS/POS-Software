@@ -12,6 +12,7 @@ import '../services/product_sync_service.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/product_photo_service.dart';
+import '../services/product_picture_optimization_service.dart';
 
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.product});
@@ -28,6 +29,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final ProductPhotoService _photoService = ProductPhotoService.instance;
 
   XFile? _selectedPhoto;
+
+  final ProductPictureOptimizationService _pictureOptimizer =
+      ProductPictureOptimizationService.instance;
+
   Uint8List? _photoBytes;
   bool _removeExistingPhoto = false;
   bool _loadingPhoto = false;
@@ -372,6 +377,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         isDeleted: false,
       );
 
+      XFile? optimizedSelectedPhoto;
+
+      if (_selectedPhoto != null) {
+        final sourceBytes = await _selectedPhoto!.readAsBytes();
+
+        final optimized = _pictureOptimizer.optimizeMaster(
+          sourceBytes: sourceBytes,
+          sku: product.sku,
+        );
+
+        optimizedSelectedPhoto = XFile.fromData(
+          optimized.bytes,
+          name: optimized.fileName,
+          mimeType: optimized.mimeType,
+        );
+      }
+
       if (kIsWeb) {
         await _service.save(
           id: existingProduct?.id,
@@ -416,7 +438,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         if (_selectedPhoto != null) {
           webPhotoPath = await _photoService.savePhoto(
             sku: product.sku,
-            selectedPhoto: _selectedPhoto!,
+            selectedPhoto: optimizedSelectedPhoto!,
           );
         }
 
@@ -448,7 +470,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         if (_selectedPhoto != null) {
           savedPhotoPath = await _photoService.savePhoto(
             sku: product.sku,
-            selectedPhoto: _selectedPhoto!,
+            selectedPhoto: optimizedSelectedPhoto!,
           );
         }
 
