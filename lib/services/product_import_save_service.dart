@@ -9,6 +9,7 @@ import '../models/product_import_save_result.dart';
 import '../models/product_import_summary.dart';
 import '../repositories/product_repository.dart';
 import 'product_photo_service.dart';
+import 'product_picture_optimization_service.dart';
 import 'product_service.dart';
 import 'product_sync_service.dart';
 
@@ -33,6 +34,9 @@ class ProductImportSaveService {
   final ProductPhotoService _photoService = ProductPhotoService.instance;
 
   final Uuid _uuid = const Uuid();
+
+  final ProductPictureOptimizationService _pictureOptimizer =
+      ProductPictureOptimizationService.instance;
 
   Future<ProductImportSaveResult> importValidRows(
     ProductImportParseResult result, {
@@ -279,11 +283,15 @@ class ProductImportSaveService {
     }
 
     try {
-      final pictureName = row.normalizedPictureFileName ?? '${product.sku}.jpg';
+      final optimized = _pictureOptimizer.optimizeMaster(
+        sourceBytes: row.pictureBytes!,
+        sku: product.sku,
+      );
 
       final selectedPhoto = XFile.fromData(
-        row.pictureBytes!,
-        name: pictureName,
+        optimized.bytes,
+        name: optimized.fileName,
+        mimeType: optimized.mimeType,
       );
 
       final savedPath = await _photoService.savePhoto(
