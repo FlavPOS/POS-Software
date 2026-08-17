@@ -2340,6 +2340,13 @@ class _ProductThumbnailState extends State<_ProductThumbnail> {
 
     final imageWidth = tablet ? 140.0 : 124.0;
 
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+
+    final decodeWidth = (imageWidth * pixelRatio)
+        .round()
+        .clamp(240, 480)
+        .toInt();
+
     return SizedBox(
       width: imageWidth,
       height: double.infinity,
@@ -2357,8 +2364,10 @@ class _ProductThumbnailState extends State<_ProductThumbnail> {
             width: imageWidth,
             height: double.infinity,
             fit: BoxFit.cover,
-            alignment: Alignment.center,
+            cacheWidth: decodeWidth,
             filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            alignment: Alignment.center,
             errorBuilder: (context, error, stackTrace) {
               return _placeholder();
             },
