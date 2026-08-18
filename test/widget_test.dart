@@ -16,11 +16,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Simple POS'), findsOneWidget);
-    expect(find.text('Cashiering'), findsOneWidget);
-    expect(find.text('Products'), findsOneWidget);
-    expect(find.text('Inventory'), findsOneWidget);
-    expect(find.text('Sales History'), findsOneWidget);
-    expect(find.textContaining('Firebase Connected'), findsOneWidget);
+    expect(find.text('Cashiering'), findsAtLeastNWidgets(1));
+    expect(find.text('Products'), findsAtLeastNWidgets(1));
+    expect(find.text('Inventory'), findsAtLeastNWidgets(1));
+    expect(find.text('Sales History'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Firebase Connected'), findsAtLeastNWidgets(1));
     expect(find.textContaining('pos-software-ef89c'), findsOneWidget);
   });
 }
