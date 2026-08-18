@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/product.dart';
 import '../../repositories/product_repository.dart';
+import '../../services/inventory_excel_export_service.dart';
 import '../../services/product_service.dart';
 import '../../services/product_photo_service.dart';
 
@@ -42,6 +43,13 @@ class _InventoryOverviewState extends State<_InventoryOverview> {
   final TextEditingController _searchController = TextEditingController();
 
   String _searchText = '';
+
+  final InventoryExcelExportService _excelExportService =
+      InventoryExcelExportService.instance;
+
+  List<Product> _visibleProducts = <Product>[];
+
+  bool _exportingExcel = false;
 
   Stream<List<Product>> get _productStream {
     final injected = widget.productStream;
@@ -137,6 +145,8 @@ class _InventoryOverviewState extends State<_InventoryOverview> {
 
                   final products = _filterProducts(snapshot.data!);
 
+                  _visibleProducts = products;
+
                   if (products.isEmpty) {
                     return _InventoryMessage(
                       icon: Icons.search_off,
@@ -167,6 +177,76 @@ class _InventoryOverviewState extends State<_InventoryOverview> {
     );
   }
 
+  Future<void> _exportInventoryExcel() async {
+    if (_exportingExcel) {
+      return;
+    }
+
+    if (_visibleProducts.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'There are no Inventory '
+              'products to export.',
+            ),
+          ),
+        );
+
+      return;
+    }
+
+    setState(() {
+      _exportingExcel = true;
+    });
+
+    try {
+      final result = await _excelExportService.export(
+        products: List<Product>.unmodifiable(_visibleProducts),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              '${result.productCount} product(s) '
+              'exported to ${result.fileName}.',
+            ),
+          ),
+        );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Unable to export Inventory: '
+              '$error',
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingExcel = false;
+        });
+      }
+    }
+  }
+
   Widget _buildSearchArea({
     required double horizontalPadding,
     required bool mobile,
@@ -191,54 +271,108 @@ class _InventoryOverviewState extends State<_InventoryOverview> {
                 style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _searchText = value;
-                  });
-                },
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText:
-                      'Search SKU, Product Name, '
-                      'or Barcode',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchText.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () {
-                            _searchController.clear();
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 700;
 
-                            setState(() {
-                              _searchText = '';
-                            });
-                          },
-                          icon: const Icon(Icons.close),
+                  final searchField = TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchText = value;
+                      });
+                    },
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: compact
+                          ? 'Search SKU, Name, '
+                                'or Barcode'
+                          : 'Search SKU, Product '
+                                'Name, or Barcode',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchText.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _searchController.clear();
+
+                                setState(() {
+                                  _searchText = '';
+                                });
+                              },
+                              icon: const Icon(Icons.close),
+                            ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF5B5CEB),
+                          width: 2,
                         ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF5B5CEB),
-                      width: 2,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+
+                  final exportButton = FilledButton.icon(
+                    onPressed: _exportingExcel ? null : _exportInventoryExcel,
+                    icon: _exportingExcel
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.download_outlined),
+                    label: Text(
+                      _exportingExcel ? 'EXPORTING...' : 'EXPORT EXCEL',
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+
+                  if (compact) {
+                    return Column(
+                      children: [
+                        searchField,
+                        const SizedBox(height: 10),
+                        SizedBox(width: double.infinity, child: exportButton),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: searchField),
+                      const SizedBox(width: 12),
+                      exportButton,
+                    ],
+                  );
+                },
               ),
             ],
           ),
