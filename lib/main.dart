@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'services/product_sync_service.dart';
 import 'database/database_helper.dart';
 import 'screens/products_screen.dart';
+import 'screens/inventory/inventory_module_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -115,7 +116,12 @@ class DashboardScreen extends StatelessWidget {
         icon: Icons.warehouse_outlined,
         color: const Color(0xFF0F766E),
         onTap: () {
-          _showComingSoon(context, 'Inventory');
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => const InventoryModuleScreen(),
+            ),
+          );
         },
       ),
       _DashboardModule(
