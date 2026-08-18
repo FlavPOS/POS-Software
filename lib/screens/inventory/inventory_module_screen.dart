@@ -312,7 +312,7 @@ class _InventoryProductList extends StatelessWidget {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
-                  width: 1280,
+                  width: 1400,
                   child: Column(
                     children: [
                       const _WideInventoryHeader(),
@@ -358,21 +358,21 @@ class _WideInventoryHeader extends StatelessWidget {
       child: const Row(
         children: [
           _WideInventoryHeaderCell(label: 'SKU', width: 125),
-          _WideInventoryHeaderCell(label: 'Product Name', width: 240),
-          _WideInventoryHeaderCell(label: 'Department', width: 155),
-          _WideInventoryHeaderCell(label: 'Class', width: 145),
-          _WideInventoryHeaderCell(label: 'Subclass', width: 155),
+          _WideInventoryHeaderCell(label: 'Product Name', width: 250),
+          _WideInventoryHeaderCell(label: 'Department', width: 165),
+          _WideInventoryHeaderCell(label: 'Class', width: 155),
+          _WideInventoryHeaderCell(label: 'Subclass', width: 165),
           _WideInventoryHeaderCell(
             label: 'SOH',
-            width: 90,
+            width: 95,
             alignment: Alignment.centerRight,
           ),
           _WideInventoryHeaderCell(
             label: 'Retail',
-            width: 115,
+            width: 145,
             alignment: Alignment.centerRight,
           ),
-          _WideInventoryHeaderCell(label: 'Last Updated', width: 180),
+          _WideInventoryHeaderCell(label: 'Last Updated', width: 220),
         ],
       ),
     );
@@ -394,16 +394,19 @@ class _WideInventoryHeaderCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Align(
-        alignment: alignment,
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Align(
+          alignment: alignment,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF374151),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -438,7 +441,7 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 240,
+            width: 250,
             child: Text(
               product.name,
               maxLines: 1,
@@ -451,7 +454,7 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 155,
+            width: 165,
             child: Text(
               _classification(product.category),
               maxLines: 1,
@@ -459,7 +462,7 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 145,
+            width: 155,
             child: Text(
               _classification(product.productClass),
               maxLines: 1,
@@ -467,7 +470,7 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 155,
+            width: 165,
             child: Text(
               _classification(product.subcategory),
               maxLines: 1,
@@ -475,12 +478,12 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 90,
+            width: 95,
             alignment: Alignment.centerRight,
             child: _SohValue(value: product.currentStock),
           ),
           _WideInventoryDataCell(
-            width: 115,
+            width: 145,
             alignment: Alignment.centerRight,
             child: Text(
               _formatCurrency(product.sellingPrice),
@@ -495,7 +498,7 @@ class _WideInventoryRow extends StatelessWidget {
             ),
           ),
           _WideInventoryDataCell(
-            width: 180,
+            width: 220,
             child: Text(
               _formatUpdatedAt(product.updatedAt),
               maxLines: 1,
@@ -524,7 +527,10 @@ class _WideInventoryDataCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Align(alignment: alignment, child: child),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Align(alignment: alignment, child: child),
+      ),
     );
   }
 }
