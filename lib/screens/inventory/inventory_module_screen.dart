@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/product.dart';
 import '../../repositories/product_repository.dart';
 import '../../services/product_service.dart';
+import '../../services/product_photo_service.dart';
 
 class InventoryModuleScreen extends StatelessWidget {
   const InventoryModuleScreen({super.key, this.productStream});
@@ -421,92 +422,105 @@ class _WideInventoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
+    void openDetails() {
+      _showInventoryProductDetails(context, product);
+    }
+
+    return Material(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          _WideInventoryDataCell(
-            width: 125,
-            child: Text(
-              product.sku,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF4F46E5),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+      child: InkWell(
+        onTap: openDetails,
+        onDoubleTap: openDetails,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              _WideInventoryDataCell(
+                width: 125,
+                child: Text(
+                  product.sku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF4F46E5),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-          ),
-          _WideInventoryDataCell(
-            width: 250,
-            child: Text(
-              product.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+              _WideInventoryDataCell(
+                width: 250,
+                child: Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          _WideInventoryDataCell(
-            width: 165,
-            child: Text(
-              _classification(product.category),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          _WideInventoryDataCell(
-            width: 155,
-            child: Text(
-              _classification(product.productClass),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          _WideInventoryDataCell(
-            width: 165,
-            child: Text(
-              _classification(product.subcategory),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          _WideInventoryDataCell(
-            width: 95,
-            alignment: Alignment.centerRight,
-            child: _SohValue(value: product.currentStock),
-          ),
-          _WideInventoryDataCell(
-            width: 145,
-            alignment: Alignment.centerRight,
-            child: Text(
-              _formatCurrency(product.sellingPrice),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+              _WideInventoryDataCell(
+                width: 165,
+                child: Text(
+                  _classification(product.category),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+              _WideInventoryDataCell(
+                width: 155,
+                child: Text(
+                  _classification(product.productClass),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _WideInventoryDataCell(
+                width: 165,
+                child: Text(
+                  _classification(product.subcategory),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _WideInventoryDataCell(
+                width: 95,
+                alignment: Alignment.centerRight,
+                child: _SohValue(value: product.currentStock),
+              ),
+              _WideInventoryDataCell(
+                width: 145,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _formatCurrency(product.sellingPrice),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _WideInventoryDataCell(
+                width: 220,
+                child: Text(
+                  _formatUpdatedAt(product.updatedAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF4B5563),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
-          _WideInventoryDataCell(
-            width: 220,
-            child: Text(
-              _formatUpdatedAt(product.updatedAt),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -568,57 +582,581 @@ class _MobileInventoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    void openDetails() {
+      _showInventoryProductDetails(context, product);
+    }
+
+    return Material(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 24,
-            child: Text(
-              product.sku,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF4F46E5),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 42,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7),
-              child: Text(
-                product.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: openDetails,
+        onDoubleTap: openDetails,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 24,
+                child: Text(
+                  product.sku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF4F46E5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              Expanded(
+                flex: 42,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  child: Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 14,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _SohValue(value: product.currentStock),
+                ),
+              ),
+              Expanded(
+                flex: 20,
+                child: Text(
+                  _formatCurrency(product.sellingPrice),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _showInventoryProductDetails(
+  BuildContext context,
+  Product product,
+) async {
+  final width = MediaQuery.sizeOf(context).width;
+
+  if (width < 600) {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.88,
+          child: Material(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            clipBehavior: Clip.antiAlias,
+            child: _InventoryProductDetails(product: product, mobile: true),
+          ),
+        );
+      },
+    );
+
+    return;
+  }
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (context) {
+      final dialogWidth = width >= 1200 ? 920.0 : 760.0;
+
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogWidth,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+          ),
+          child: Material(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(22),
+            clipBehavior: Clip.antiAlias,
+            child: _InventoryProductDetails(product: product, mobile: false),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _InventoryProductDetails extends StatelessWidget {
+  const _InventoryProductDetails({required this.product, required this.mobile});
+
+  final Product product;
+  final bool mobile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ProductDetailsHeader(productName: product.name, mobile: mobile),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(mobile ? 18 : 24),
+            child: mobile ? _buildMobileContent() : _buildWideContent(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(child: _InventoryProductPhoto(product: product, size: 190)),
+        const SizedBox(height: 20),
+        _ProductIdentitySection(product: product),
+        const SizedBox(height: 18),
+        _ProductStockSection(product: product),
+        const SizedBox(height: 18),
+        _ProductPricingSection(product: product),
+        const SizedBox(height: 18),
+        _ProductClassificationSection(product: product),
+        const SizedBox(height: 18),
+        _ProductAuditSection(product: product),
+      ],
+    );
+  }
+
+  Widget _buildWideContent() {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _InventoryProductPhoto(product: product, size: 250),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                children: [
+                  _ProductIdentitySection(product: product),
+                  const SizedBox(height: 18),
+                  _ProductStockSection(product: product),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _ProductPricingSection(product: product)),
+            const SizedBox(width: 18),
+            Expanded(child: _ProductClassificationSection(product: product)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _ProductAuditSection(product: product),
+      ],
+    );
+  }
+}
+
+class _ProductDetailsHeader extends StatelessWidget {
+  const _ProductDetailsHeader({
+    required this.productName,
+    required this.mobile,
+  });
+
+  final String productName;
+  final bool mobile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF5B5CEB),
+      padding: EdgeInsets.fromLTRB(mobile ? 18 : 24, 14, 8, 14),
+      child: Row(
+        children: [
+          const Icon(Icons.inventory_2_outlined, color: Colors.white),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Product Details',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            flex: 14,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _SohValue(value: product.currentStock),
-            ),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.close, color: Colors.white),
           ),
-          Expanded(
-            flex: 20,
+        ],
+      ),
+    );
+  }
+}
+
+class _InventoryProductPhoto extends StatefulWidget {
+  const _InventoryProductPhoto({required this.product, required this.size});
+
+  final Product product;
+  final double size;
+
+  @override
+  State<_InventoryProductPhoto> createState() => _InventoryProductPhotoState();
+}
+
+class _InventoryProductPhotoState extends State<_InventoryProductPhoto> {
+  final ProductPhotoService _photoService = ProductPhotoService.instance;
+
+  late Future<Uint8List?> _photoFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _photoFuture = _loadPhoto();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InventoryProductPhoto oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.product.sku != widget.product.sku ||
+        oldWidget.product.localPhotoPath != widget.product.localPhotoPath ||
+        oldWidget.product.updatedAt != widget.product.updatedAt) {
+      _photoFuture = _loadPhoto();
+    }
+  }
+
+  Future<Uint8List?> _loadPhoto() async {
+    final product = widget.product;
+
+    final photoPath = kIsWeb
+        ? await _photoService.getPhotoPath(product.sku)
+        : product.localPhotoPath ??
+              await _photoService.getPhotoPath(product.sku);
+
+    return _photoService.readPhotoBytes(photoPath);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+
+    final decodeWidth = (widget.size * pixelRatio)
+        .round()
+        .clamp(320, 900)
+        .toInt();
+
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE9FE),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD8D6FE)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: FutureBuilder<Uint8List?>(
+        future: _photoFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final bytes = snapshot.data;
+
+          if (bytes == null || bytes.isEmpty) {
+            return const Icon(
+              Icons.inventory_2_outlined,
+              color: Color(0xFF6D28D9),
+              size: 62,
+            );
+          }
+
+          return Image.memory(
+            bytes,
+            width: widget.size,
+            height: widget.size,
+            fit: BoxFit.cover,
+            cacheWidth: decodeWidth,
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return const Icon(
+                Icons.inventory_2_outlined,
+                color: Color(0xFF6D28D9),
+                size: 62,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProductIdentitySection extends StatelessWidget {
+  const _ProductIdentitySection({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductDetailCard(
+      title: 'Product Information',
+      icon: Icons.badge_outlined,
+      children: [
+        _ProductDetailLine(label: 'Product Name', value: product.name),
+        _ProductDetailLine(label: 'SKU', value: product.sku),
+        _ProductDetailLine(
+          label: 'Barcode',
+          value: _detailValue(product.barcode),
+        ),
+        _ProductDetailLine(
+          label: 'Status',
+          value: product.active ? 'Active' : 'Inactive',
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductStockSection extends StatelessWidget {
+  const _ProductStockSection({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductDetailCard(
+      title: 'Stock Information',
+      icon: Icons.warehouse_outlined,
+      children: [
+        _ProductDetailLine(
+          label: 'Stock Status',
+          value: _productStockStatus(product),
+          valueColor: _productStockStatusColor(product),
+        ),
+        _ProductDetailLine(
+          label: 'Current SOH',
+          value: product.currentStock.toString(),
+        ),
+        _ProductDetailLine(
+          label: 'Beginning Stock',
+          value: product.beginningStock.toString(),
+        ),
+        _ProductDetailLine(
+          label: 'Minimum Stock',
+          value: product.minimumStock.toString(),
+        ),
+        _ProductDetailLine(
+          label: 'Maximum Stock',
+          value: product.maximumStock.toString(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductPricingSection extends StatelessWidget {
+  const _ProductPricingSection({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductDetailCard(
+      title: 'Pricing',
+      icon: Icons.account_balance_wallet_outlined,
+      children: [
+        _ProductDetailLine(
+          label: 'Retail Price',
+          value: _formatCurrency(product.sellingPrice),
+        ),
+        _ProductDetailLine(
+          label: 'Cost Price',
+          value: _formatCurrency(product.costPrice),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductClassificationSection extends StatelessWidget {
+  const _ProductClassificationSection({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductDetailCard(
+      title: 'Classification',
+      icon: Icons.account_tree_outlined,
+      children: [
+        _ProductDetailLine(
+          label: 'Department',
+          value: _classification(product.category),
+        ),
+        _ProductDetailLine(
+          label: 'Class',
+          value: _classification(product.productClass),
+        ),
+        _ProductDetailLine(
+          label: 'Subclass',
+          value: _classification(product.subcategory),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductAuditSection extends StatelessWidget {
+  const _ProductAuditSection({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductDetailCard(
+      title: 'Record Information',
+      icon: Icons.history,
+      children: [
+        _ProductDetailLine(
+          label: 'Last Updated',
+          value: _formatUpdatedAt(product.updatedAt),
+        ),
+        const _ProductDetailLine(label: 'Access', value: 'Read-only'),
+      ],
+    );
+  }
+}
+
+class _ProductDetailCard extends StatelessWidget {
+  const _ProductDetailCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xFF5B5CEB), size: 20),
+              const SizedBox(width: 9),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductDetailLine extends StatelessWidget {
+  const _ProductDetailLine({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
             child: Text(
-              _formatCurrency(product.sellingPrice),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
+              label,
               style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 11,
+                color: Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: valueColor ?? const Color(0xFF111827),
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -627,6 +1165,36 @@ class _MobileInventoryRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _detailValue(String? value) {
+  final normalized = value?.trim() ?? '';
+
+  return normalized.isEmpty ? 'Not available' : normalized;
+}
+
+String _productStockStatus(Product product) {
+  if (product.currentStock <= 0) {
+    return 'Out of Stock';
+  }
+
+  if (product.currentStock <= product.minimumStock) {
+    return 'Low Stock';
+  }
+
+  return 'In Stock';
+}
+
+Color _productStockStatusColor(Product product) {
+  if (product.currentStock <= 0) {
+    return const Color(0xFFDC2626);
+  }
+
+  if (product.currentStock <= product.minimumStock) {
+    return const Color(0xFFD97706);
+  }
+
+  return const Color(0xFF047857);
 }
 
 class _HeaderText extends StatelessWidget {
