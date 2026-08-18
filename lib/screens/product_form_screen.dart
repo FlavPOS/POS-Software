@@ -320,7 +320,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       final now = DateTime.now().millisecondsSinceEpoch;
       final existingProduct = widget.product;
 
-      final currentStock = int.parse(_stock.text.trim());
+      final preservedBeginningStock = existingProduct?.beginningStock ?? 0;
+
+      final preservedCurrentStock = existingProduct?.currentStock ?? 0;
 
       final minimumStock = int.parse(_minimumStock.text.trim());
 
@@ -332,16 +334,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             content: Text(
               'Minimum stock cannot be greater than maximum stock.',
             ),
-          ),
-        );
-
-        return;
-      }
-
-      if (currentStock > maximumStock) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Current stock cannot exceed maximum stock.'),
           ),
         );
 
@@ -361,8 +353,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         barcode: normalizedBarcode,
         costPrice: costPrice,
         sellingPrice: sellingPrice,
-        beginningStock: existingProduct?.beginningStock ?? currentStock,
-        currentStock: currentStock,
+        beginningStock: preservedBeginningStock,
+        currentStock: preservedCurrentStock,
         minimumStock: minimumStock,
         maximumStock: maximumStock,
         category: _category,
@@ -921,6 +913,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _stock,
+            readOnly: true,
+            enableInteractiveSelection: false,
             onChanged: (_) {
               setState(() {});
             },
