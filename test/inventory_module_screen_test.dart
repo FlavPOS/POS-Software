@@ -23,7 +23,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Inventory'), findsAtLeastNWidgets(1));
+    expect(find.text('Inventory'), findsOneWidget);
 
     expect(find.byType(TextField), findsOneWidget);
 

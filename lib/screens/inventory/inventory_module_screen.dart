@@ -184,15 +184,6 @@ class _InventoryOverviewState extends State<_InventoryOverview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Inventory',
-                style: TextStyle(
-                  color: const Color(0xFF111827),
-                  fontSize: mobile ? 24 : 30,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 5),
               const Text(
                 'Search the Product Masterfile '
                 'and view current SOH.',
@@ -277,19 +268,34 @@ class _InventoryProductList extends StatelessWidget {
   }
 
   Widget _buildMobileList() {
-    return ListView.separated(
+    return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 24),
-      itemCount: products.length + 1,
-      separatorBuilder: (context, index) {
-        return const Divider(height: 1, color: Color(0xFFE5E7EB));
-      },
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return const _MobileInventoryHeader();
-        }
-
-        return _MobileInventoryRow(product: products[index - 1]);
-      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              const _MobileInventoryHeader(),
+              const Divider(height: 1, color: Color(0xFFD1D5DB)),
+              Expanded(
+                child: ListView.separated(
+                  padding: EdgeInsets.zero,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  itemCount: products.length,
+                  separatorBuilder: (context, index) {
+                    return const Divider(height: 1, color: Color(0xFFE5E7EB));
+                  },
+                  itemBuilder: (context, index) {
+                    return _MobileInventoryRow(product: products[index]);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
