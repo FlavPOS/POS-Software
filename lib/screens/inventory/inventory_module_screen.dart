@@ -300,117 +300,231 @@ class _InventoryProductList extends StatelessWidget {
   }
 
   Widget _buildWideTable() {
-    return Scrollbar(
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          horizontalPadding,
-          0,
-          horizontalPadding,
-          24,
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 24,
-                headingRowColor: WidgetStateProperty.all(
-                  const Color(0xFFF3F4F6),
-                ),
-                headingTextStyle: const TextStyle(
-                  color: Color(0xFF374151),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-                dataTextStyle: const TextStyle(
-                  color: Color(0xFF374151),
-                  fontSize: 13,
-                ),
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('SKU')),
-                  DataColumn(label: Text('Product Name')),
-                  DataColumn(label: Text('Department')),
-                  DataColumn(label: Text('Class')),
-                  DataColumn(label: Text('Subclass')),
-                  DataColumn(numeric: true, label: Text('SOH')),
-                  DataColumn(numeric: true, label: Text('Retail')),
-                  DataColumn(label: Text('Last Updated')),
-                ],
-                rows: products.map((product) {
-                  return DataRow(
-                    cells: <DataCell>[
-                      DataCell(
-                        SizedBox(
-                          width: 105,
-                          child: Text(
-                            product.sku,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1400),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              color: Colors.white,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: 1280,
+                  child: Column(
+                    children: [
+                      const _WideInventoryHeader(),
+                      const Divider(height: 1, color: Color(0xFFD1D5DB)),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: EdgeInsets.zero,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          itemCount: products.length,
+                          separatorBuilder: (context, index) {
+                            return const Divider(
+                              height: 1,
+                              color: Color(0xFFE5E7EB),
+                            );
+                          },
+                          itemBuilder: (context, index) {
+                            return _WideInventoryRow(product: products[index]);
+                          },
                         ),
                       ),
-                      DataCell(
-                        SizedBox(
-                          width: 220,
-                          child: Text(
-                            product.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        SizedBox(
-                          width: 130,
-                          child: Text(
-                            _classification(product.category),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        SizedBox(
-                          width: 125,
-                          child: Text(
-                            _classification(product.productClass),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        SizedBox(
-                          width: 130,
-                          child: Text(
-                            _classification(product.subcategory),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: _SohValue(value: product.currentStock),
-                        ),
-                      ),
-                      DataCell(
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            _formatCurrency(product.sellingPrice),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                      DataCell(Text(_formatUpdatedAt(product.updatedAt))),
                     ],
-                  );
-                }).toList(),
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _WideInventoryHeader extends StatelessWidget {
+  const _WideInventoryHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      color: const Color(0xFFF3F4F6),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: const Row(
+        children: [
+          _WideInventoryHeaderCell(label: 'SKU', width: 125),
+          _WideInventoryHeaderCell(label: 'Product Name', width: 240),
+          _WideInventoryHeaderCell(label: 'Department', width: 155),
+          _WideInventoryHeaderCell(label: 'Class', width: 145),
+          _WideInventoryHeaderCell(label: 'Subclass', width: 155),
+          _WideInventoryHeaderCell(
+            label: 'SOH',
+            width: 90,
+            alignment: Alignment.centerRight,
+          ),
+          _WideInventoryHeaderCell(
+            label: 'Retail',
+            width: 115,
+            alignment: Alignment.centerRight,
+          ),
+          _WideInventoryHeaderCell(label: 'Last Updated', width: 180),
+        ],
+      ),
+    );
+  }
+}
+
+class _WideInventoryHeaderCell extends StatelessWidget {
+  const _WideInventoryHeaderCell({
+    required this.label,
+    required this.width,
+    this.alignment = Alignment.centerLeft,
+  });
+
+  final String label;
+  final double width;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Align(
+        alignment: alignment,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF374151),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WideInventoryRow extends StatelessWidget {
+  const _WideInventoryRow({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _WideInventoryDataCell(
+            width: 125,
+            child: Text(
+              product.sku,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF4F46E5),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 240,
+            child: Text(
+              product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 155,
+            child: Text(
+              _classification(product.category),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 145,
+            child: Text(
+              _classification(product.productClass),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 155,
+            child: Text(
+              _classification(product.subcategory),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 90,
+            alignment: Alignment.centerRight,
+            child: _SohValue(value: product.currentStock),
+          ),
+          _WideInventoryDataCell(
+            width: 115,
+            alignment: Alignment.centerRight,
+            child: Text(
+              _formatCurrency(product.sellingPrice),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          _WideInventoryDataCell(
+            width: 180,
+            child: Text(
+              _formatUpdatedAt(product.updatedAt),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WideInventoryDataCell extends StatelessWidget {
+  const _WideInventoryDataCell({
+    required this.width,
+    required this.child,
+    this.alignment = Alignment.centerLeft,
+  });
+
+  final double width;
+  final Widget child;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Align(alignment: alignment, child: child),
     );
   }
 }
