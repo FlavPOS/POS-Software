@@ -11,6 +11,7 @@ import 'database/database_helper.dart';
 import 'screens/products_screen.dart';
 import 'screens/inventory/inventory_module_screen.dart';
 import 'screens/adjustment/adjustment_module_screen.dart';
+import 'screens/received_delivery/received_delivery_module_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -135,6 +136,20 @@ class DashboardScreen extends StatelessWidget {
             context,
             MaterialPageRoute<void>(
               builder: (_) => const AdjustmentModuleScreen(),
+            ),
+          );
+        },
+      ),
+      _DashboardModule(
+        title: 'Received Delivery',
+        subtitle: 'Receive supplier stock',
+        icon: Icons.local_shipping_outlined,
+        color: const Color(0xFF0F766E),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => const ReceivedDeliveryModuleScreen(),
             ),
           );
         },
