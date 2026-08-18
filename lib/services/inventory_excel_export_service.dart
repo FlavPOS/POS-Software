@@ -107,8 +107,8 @@ class InventoryExcelExportService {
 
       final values = <CellValue?>[
         TextCellValue(_formatDateTime(extractedAt)),
-        TextCellValue(product.sku),
-        TextCellValue(_optionalValue(product.barcode)),
+        IntCellValue(_requiredNumericCode(product.sku, fieldName: 'SKU')),
+        _optionalNumericCode(product.barcode, fieldName: 'Barcode'),
         TextCellValue(product.name),
         TextCellValue(_classification(product.category)),
         TextCellValue(_classification(product.productClass)),
@@ -133,6 +133,23 @@ class InventoryExcelExportService {
         cell.cellStyle = CellStyle(
           verticalAlign: VerticalAlign.Center,
           textWrapping: TextWrapping.WrapText,
+          bottomBorder: Border(
+            borderStyle: BorderStyle.Thin,
+            borderColorHex: ExcelColor.fromHexString('#E5E7EB'),
+          ),
+        );
+      }
+      for (final codeColumn in <int>[1, 2]) {
+        final codeCell = sheet.cell(
+          CellIndex.indexByColumnRow(
+            columnIndex: codeColumn,
+            rowIndex: rowNumber,
+          ),
+        );
+
+        codeCell.cellStyle = CellStyle(
+          verticalAlign: VerticalAlign.Center,
+          numberFormat: NumFormat.custom(formatCode: '0'),
           bottomBorder: Border(
             borderStyle: BorderStyle.Thin,
             borderColorHex: ExcelColor.fromHexString('#E5E7EB'),
@@ -192,7 +209,7 @@ class InventoryExcelExportService {
     const widths = <double>[
       21,
       16,
-      19,
+      20,
       32,
       20,
       20,
@@ -230,10 +247,45 @@ class InventoryExcelExportService {
     return normalized.isEmpty ? 'Not classified' : normalized;
   }
 
-  static String _optionalValue(String? value) {
+  static int _requiredNumericCode(String value, {required String fieldName}) {
+    final normalized = value.trim();
+
+    if (normalized.isEmpty) {
+      throw FormatException(
+        '$fieldName is required for '
+        'Inventory Excel export.',
+      );
+    }
+
+    if (!RegExp(r'^\d+$').hasMatch(normalized)) {
+      throw FormatException(
+        '$fieldName must contain whole '
+        'numbers only. Invalid value: '
+        '$normalized',
+      );
+    }
+
+    if (normalized.length > 15) {
+      throw FormatException(
+        '$fieldName exceeds Excel numeric '
+        'precision. Maximum is 15 digits.',
+      );
+    }
+
+    return int.parse(normalized);
+  }
+
+  static CellValue? _optionalNumericCode(
+    String? value, {
+    required String fieldName,
+  }) {
     final normalized = value?.trim() ?? '';
 
-    return normalized.isEmpty ? 'Not available' : normalized;
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return IntCellValue(_requiredNumericCode(normalized, fieldName: fieldName));
   }
 
   static String _formatTimestamp(int timestamp) {

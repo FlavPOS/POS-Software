@@ -5,7 +5,7 @@ import 'package:simple_pos/services/inventory_excel_export_service.dart';
 
 Product buildProduct({
   String id = 'product-001',
-  String sku = 'SKU-001',
+  String sku = '12345617',
   String name = 'Test Product',
   String? barcode = '480000000001',
   int beginningStock = 10,
@@ -95,7 +95,7 @@ void main() {
 
       expect(sheet.rows[1][0]?.value.toString(), '08/18/2026 09:15');
 
-      expect(sheet.rows[1][1]?.value.toString(), 'SKU-001');
+      expect(sheet.rows[1][1]?.value.toString(), '12345617');
 
       expect(sheet.rows[1][8]?.value.toString(), '8');
     });
