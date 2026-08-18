@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simple_pos/models/product.dart';
 import 'package:simple_pos/screens/inventory/inventory_module_screen.dart';
 
 void main() {
-  testWidgets('Inventory Module displays all sections', (tester) async {
+  testWidgets('Inventory Module displays employee SOH lookup', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
+
     tester.view.devicePixelRatio = 1;
 
     addTearDown(tester.view.resetPhysicalSize);
 
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const MaterialApp(home: InventoryModuleScreen()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InventoryModuleScreen(
+          productStream: Stream<List<Product>>.value(const <Product>[]),
+        ),
+      ),
+    );
 
     await tester.pumpAndSettle();
 
@@ -25,10 +33,8 @@ void main() {
 
     expect(find.text('Adjustment Types'), findsOneWidget);
 
-    expect(find.text('Current Inventory'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
 
-    expect(find.textContaining('OH × Cost Price'), findsAtLeastNWidgets(1));
-
-    expect(find.textContaining('No Retail Price'), findsOneWidget);
+    expect(find.textContaining('No products found'), findsOneWidget);
   });
 }
